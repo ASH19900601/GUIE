@@ -1,0 +1,47 @@
+{
+  "name": "guie-studio",
+  "version": "1.0.0",
+  "description": "Ren'Py 可视化零代码视觉小说创作引擎 — 纯 GUI 全流程创作 + 内置 AI 兜底 + 即时预览与时间轴调试",
+  "author": "GUIE Studio Contributors",
+  "license": "MIT",
+  "main": "dist-electron/main/index.js",
+  "scripts": {
+    "prepare:runtime": "node scripts/prepare-runtime.mjs --ensure",
+    "pack:runtime": "node scripts/prepare-runtime.mjs --pack",
+    "dev": "node scripts/dev.mjs",
+    "dev:web": "vite",
+    "build:electron": "node scripts/build-electron.mjs",
+    "build:renderer": "vite build",
+    "build": "npm run prepare:runtime && npm run build:renderer && npm run build:electron",
+    "dist:win": "npm run build && electron-builder --win nsis portable",
+    "dist:nsis": "npm run build && electron-builder --win nsis",
+    "dist:portable": "npm run build && electron-builder --win portable",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "node scripts/run-e2e.mjs",
+    "screenshots": "node scripts/capture-screenshots.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "lucide-react": "^1.76.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "sherpa-onnx-node": "^2.0.2",
+    "zustand": "^5.1.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.18",
+    "@types/node": "^22.15.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "electron": "41.2.0",
+    "electron-builder": "^26.18.0",
+    "esbuild": "^0.25.5",
+    "playwright-core": "^1.52.0",
+    "tailwindcss": "^4.1.18",
+    "typescript": "^5.8.3",
+    "vite": "^7.0.0",
+    "vitest": "^3.2.0"
+  }
+}

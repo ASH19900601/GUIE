@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "generatedAt": "2026-11-19T13:50:54.239Z",
+  "bundles": [
+    {
+      "id": "renpy-sdk",
+      "archiveSha256": "68c4406ae61716d4adfe54a3aa59138dbb07feddbc8bc2439242719067dda42e",
+      "extractSubdir": ".",
+      "parts": [
+        {
+          "file": "renpy-sdk.tar.gz.part000",
+          "size": 83886080,
+          "sha256": "10bf474f41d2d0e78f5eed8f62fc8836963ac7160b98b23c20f7b7668960bc8f"
+        },
+        {
+          "file": "renpy-sdk.tar.gz.part001",
+          "size": 28202357,
+          "sha256": "42c5c47a5eb33ed66f62dbcb3150a9480ddb8094a0cdc82e478ecd77c5659dcb"
+        }
+      ]
+    },
+    {
+      "id": "asr-model",
+      "archiveSha256": "a49566f137fa0bcaf8a9f88727688d4d6657e5381527309721dbf056a36a7965",
+      "extractSubdir": ".",
+      "parts": [
+        {
+          "file": "asr-model.tar.gz.part000",
+          "size": 74226548,
+          "sha256": "a49566f137fa0bcaf8a9f88727688d4d6657e5381527309721dbf056a36a7965"
+        }
+      ]
+    }
+  ]
+}

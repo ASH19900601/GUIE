@@ -1,0 +1,150 @@
+@import "tailwindcss";
+
+:root {
+  --paper-bg: #F3F0E8;
+  --paper-surface: #FBFAF5;
+  --paper-card: #FFFFFF;
+  --paper-hover: #EFECE3;
+  --ink-primary: #171513;
+  --ink-secondary: #706A60;
+  --ink-muted: #948D82;
+  --border-main: #D7D1C6;
+  --border-subtle: #E7E2D8;
+  --accent: #FF5A3D;
+  --accent-hover: #E5482C;
+  --accent-soft: #FFF1ED;
+  --accent-border: #FBCBC1;
+  --ok: #2A7B50;
+  --ok-soft: #EDF7F1;
+  --warn: #B86E00;
+  --warn-soft: #FDF5E6;
+  --danger: #C93B2B;
+  --danger-soft: #FCEEEC;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  font-family: "Microsoft YaHei UI", "PingFang SC", "Noto Sans SC", "Segoe UI", system-ui, -apple-system, sans-serif;
+  background-color: var(--paper-bg);
+  color: var(--ink-primary);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+/* Requirement 6.1: Hide left navigation scrollbar cleanly while preserving wheel/trackpad scrolling */
+.sidebar-scroll {
+  overflow-y: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.sidebar-scroll::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* Subtle warm scrollbars for main content panes */
+.paper-scroll::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+.paper-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.paper-scroll::-webkit-scrollbar-thumb {
+  background: #D0C9BC;
+  border-radius: 4px;
+}
+.paper-scroll::-webkit-scrollbar-thumb:hover {
+  background: #B8B0A0;
+}
+
+/* Restrained editorial input & button primitives */
+.paper-input {
+  background-color: #FFFFFF;
+  border: 1px solid var(--border-main);
+  border-radius: 7px;
+  color: var(--ink-primary);
+  padding: 6px 10px;
+  font-size: 13px;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.paper-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(255, 90, 61, 0.14);
+}
+
+.paper-btn-primary {
+  background-color: var(--accent);
+  color: #FFFFFF;
+  border: 1px solid var(--accent);
+  border-radius: 7px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+.paper-btn-primary:hover:not(:disabled) {
+  background-color: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+.paper-btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.paper-btn-secondary {
+  background-color: #FFFFFF;
+  color: var(--ink-primary);
+  border: 1px solid var(--border-main);
+  border-radius: 7px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.12s ease, border-color 0.12s ease;
+}
+.paper-btn-secondary:hover:not(:disabled) {
+  background-color: var(--paper-hover);
+  border-color: #C4BDB0;
+}
+.paper-btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.paper-card {
+  background-color: var(--paper-card);
+  border: 1px solid var(--border-main);
+  border-radius: 8px;
+}
+
+@keyframes shake-light {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(-3px, 2px); }
+  50% { transform: translate(3px, -2px); }
+  75% { transform: translate(-2px, -1px); }
+}
+@keyframes shake-medium {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(-7px, 4px); }
+  50% { transform: translate(7px, -4px); }
+  75% { transform: translate(-5px, -3px); }
+}
+@keyframes shake-heavy {
+  0%, 100% { transform: translate(0, 0); }
+  20% { transform: translate(-12px, 8px); }
+  40% { transform: translate(12px, -8px); }
+  60% { transform: translate(-9px, 5px); }
+  80% { transform: translate(9px, -5px); }
+}
+.animate-shake-light { animation: shake-light 0.28s ease-in-out 2; }
+.animate-shake-medium { animation: shake-medium 0.25s ease-in-out 3; }
+.animate-shake-heavy { animation: shake-heavy 0.22s ease-in-out 4; }

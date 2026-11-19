@@ -1,0 +1,45 @@
+appId: org.guie.studio
+productName: GUIE 视觉小说创作工坊
+copyright: Copyright © 2026 GUIE Studio Contributors
+directories:
+  output: release
+  buildResources: build-resources
+files:
+  - dist/**/*
+  - dist-electron/**/*
+  - package.json
+  - node_modules/sherpa-onnx-node/**/*
+  - node_modules/sherpa-onnx-win-x64/**/*
+  - "!node_modules/.cache/**/*"
+asarUnpack:
+  - "node_modules/sherpa-onnx-node/**"
+  - "node_modules/sherpa-onnx-win-x64/**"
+extraResources:
+  - from: vendor/runtime
+    to: runtime
+    filter:
+      - "**/*"
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: portable
+      arch:
+        - x64
+  icon: build-resources/icon.ico
+nsis:
+  artifactName: "GUIE-Studio-${version}-win-x64-setup.${ext}"
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: GUIE 视觉小说创作工坊
+  deleteAppDataOnUninstall: false
+  unicode: true
+  runAfterFinish: true
+portable:
+  artifactName: "GUIE-Studio-${version}-win-x64-portable.${ext}"
+  unpackDirName: guie-studio-portable
+compression: normal
