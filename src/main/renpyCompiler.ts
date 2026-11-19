@@ -69,22 +69,40 @@ export function escapeRenpyString(str: string): string {
  * `{状态:好感度}` / `{玩家名字}` interpolations) into safe Ren'Py dialogue string.
  */
 export function compileDialogueText(raw: string, project: ProjectData): string {
-  // Replace creator-friendly variable placeholders before escaping braces
-  let text = raw.replace(/\{玩家名字\}/g, '[guie_player_name]');
+  // 1. Preserve creator-friendly variable interpolations & valid Ren'Py rich-text tags with sentinels
+  const vars: string[] = [];
+  const tags: string[] = [];
+  let text = raw.replace(/\{玩家名字\}|\[player_name\]/g, () => {
+    const idx = vars.push('guie_player_name') - 1;
+    return `\uE000V${idx}\uE001`;
+  });
   text = text.replace(/\{状态:([^}]+)\}/g, (_m, varName: string) => {
     const found = project.variables.find((v) => v.name === varName.trim());
     if (!found) return varName;
-    return `[${varPythonName(found)}]`;
+    const idx = vars.push(varPythonName(found)) - 1;
+    return `\uE000V${idx}\uE001`;
   });
+  text = text.replace(
+    /\{(\/?(?:b|i|u|s|color|size|cps|p|w)(?:=[^}]+)?)\}/g,
+    (_m, inner: string) => {
+      const idx = tags.push(inner) - 1;
+      return `\uE000T${idx}\uE001`;
+    }
+  );
 
-  // Escape quotes, backslashes, newlines, percents while keeping valid Ren'Py text tags
-  // ({b}, {/b}, {i}, {/i}, {color=#...}, {/color}, {size=...}, {/size}, {cps=...}, {/cps})
-  // and [var] interpolations intact.
-  return text
+  // 2. Escape raw brackets/braces so literal `[微笑]` or `{笑}` NEVER crashes Ren'Py interpolation
+  text = text
+    .replace(/\[/g, '[[')
+    .replace(/\{/g, '{{')
     .replace(/\\/g, '\\\\')
     .replace(/"/g, '\\"')
     .replace(/\r?\n/g, '\\n')
     .replace(/%/g, '%%');
+
+  // 3. Restore valid variable interpolations & rich-text tags
+  text = text.replace(/\uE000V(\d+)\uE001/g, (_m, i) => `[${vars[Number(i)]}]`);
+  text = text.replace(/\uE000T(\d+)\uE001/g, (_m, i) => `{${tags[Number(i)]}}`);
+  return text;
 }
 
 export function compileTransitionExpr(t: TransitionType, duration = 0.5): string {
@@ -105,7 +123,7 @@ export function compileTransitionExpr(t: TransitionType, duration = 0.5): string
     case 'slideright':
       return `with CropMove(${d.toFixed(2)}, "slideright")`;
     case 'blinds':
-      return `with ImageDissolve(im.Tile("gui/window_icon.png"), ${d.toFixed(2)})` && `with Dissolve(${d.toFixed(2)})`;
+      return 'with blinds';
     case 'pixellate':
       return `with Pixellate(${d.toFixed(2)}, 5)`;
     case 'irisout':
@@ -169,14 +187,6 @@ function resolveAssetRelToGame(project: ProjectData, assetId?: string | null): s
   if (!asset) return null;
   // Ren'Py image/audio paths are relative to `game/`
   return asset.relativePath.replace(/^game[\\/]/i, '').replace(/\\/g, '/');
-}
-
-function getEffectiveFontPath(project: ProjectData, overrideAssetId?: string | null): string {
-  const overridePath = resolveAssetRelToGame(project, overrideAssetId);
-  if (overridePath) return overridePath;
-  const globalPath = resolveAssetRelToGame(project, project.appearance.font.globalFontAssetId);
-  if (globalPath) return globalPath;
-  return project.appearance.font.bundledCjkFont || 'fonts/SourceHanSansLite.ttf';
 }
 
 function hexToRgbaRenpy(hex: string, opacity: number): string {
@@ -265,16 +275,27 @@ function generateGuiRpy(project: ProjectData): string {
   const { appearance } = project;
   const w = appearance.window.width || 1920;
   const h = appearance.window.height || 1080;
-  const globalFont = getEffectiveFontPath(project);
-  const dialogueFont = getEffectiveFontPath(project, appearance.dialogueBox.fontAssetId);
+  const bundledCjk = appearance.font.bundledCjkFont || 'fonts/SourceHanSansLite.ttf';
+  const customGlobalFont = resolveAssetRelToGame(project, appearance.font.globalFontAssetId);
+  const customDialogueFont = resolveAssetRelToGame(project, appearance.dialogueBox.fontAssetId);
+  const globalFontExpr = customGlobalFont ? `"${customGlobalFont}"` : 'guie_multilang_font';
+  const dialogueFontExpr = customDialogueFont
+    ? `"${customDialogueFont}"`
+    : customGlobalFont
+    ? `"${customGlobalFont}"`
+    : 'guie_multilang_font';
+  const sixSlot = project.extensions.sixSlotSaveScreen.enabled;
 
   return `# =============================================================
-# Auto-generated Appearance & CJK-Ready GUI Configuration
+# Auto-generated Appearance & CJK+LatinExt+Cyrillic GUI Configuration
 # =============================================================
 
 init offset = -2
 init python:
     gui.init(${w}, ${h})
+
+# Open-source composite FontGroup: DejaVuSans for Latin Extended & Cyrillic + SourceHanSansLite for CJK/Kana/Hangul
+define guie_multilang_font = FontGroup().add("DejaVuSans.ttf", 0x0080, 0x052F).add("DejaVuSans.ttf", 0x1E00, 0x1EFF).add("${bundledCjk}", 0x0000, 0xFFFF)
 
 define gui.accent_color = '${appearance.theme.accentColor}'
 define gui.idle_color = '${appearance.theme.idleColor}'
@@ -288,9 +309,9 @@ define gui.text_color = '${appearance.dialogueBox.textColor || '#FFFFFF'}'
 define gui.interface_text_color = '#ffffff'
 
 # CJK & Multi-language bundled font (prevents missing glyph boxes)
-define gui.text_font = "${dialogueFont}"
-define gui.name_text_font = "${globalFont}"
-define gui.interface_text_font = "${globalFont}"
+define gui.text_font = ${dialogueFontExpr}
+define gui.name_text_font = ${globalFontExpr}
+define gui.interface_text_font = ${globalFontExpr}
 
 define gui.text_size = ${Math.round(appearance.dialogueBox.fontSize || 30)}
 define gui.name_text_size = ${Math.round(appearance.dialogueBox.nameFontSize || 34)}
@@ -315,12 +336,12 @@ define gui.choice_button_text_color = '${appearance.buttons.textColor}'
 define gui.choice_button_text_hover_color = '#ffffff'
 define gui.choice_button_text_insensitive_color = '#999999'
 
-define gui.file_slot_cols = ${project.extensions.sixSlotSaveScreen.enabled ? 3 : 3}
-define gui.file_slot_rows = ${project.extensions.sixSlotSaveScreen.enabled ? 2 : 2}
-define gui.slot_button_width = 420
-define gui.slot_button_height = 290
-define config.thumbnail_width = 384
-define config.thumbnail_height = 216
+define gui.file_slot_cols = ${sixSlot ? 3 : 2}
+define gui.file_slot_rows = ${sixSlot ? 2 : 3}
+define gui.slot_button_width = ${sixSlot ? 420 : 560}
+define gui.slot_button_height = ${sixSlot ? 290 : 124}
+define config.thumbnail_width = ${sixSlot ? 384 : 160}
+define config.thumbnail_height = ${sixSlot ? 216 : 90}
 
 define gui.nvl_borders = Borders(0, 15, 0, 30)
 define gui.nvl_list_length = 6
@@ -338,9 +359,12 @@ define gui.nvl_text_xalign = 0.0
 define guie_box_bg_color = "${hexToRgbaRenpy(appearance.dialogueBox.boxBgColor, appearance.dialogueBox.boxOpacity)}"
 define guie_btn_bg_color = "${appearance.buttons.bgColor}"
 define guie_btn_hover_color = "${appearance.buttons.hoverBgColor}"
+define guie_btn_border_color = "${appearance.buttons.borderColor || '#4A433B'}"
 define guie_menu_bg_color = "${appearance.theme.menuBgColor}"
 define guie_text_shadow_offset = ${appearance.dialogueBox.textShadow ? '(2, 2)' : '(0, 0)'}
 define guie_text_shadow_color = "${appearance.dialogueBox.shadowColor || '#000000'}"
+define guie_text_bold = ${(appearance.dialogueBox.fontWeight || 400) >= 600 ? 'True' : 'False'}
+define guie_text_kerning = ${(Number(appearance.dialogueBox.letterSpacing) || 0).toFixed(1)}
 define guie_line_spacing = ${Math.max(0, Math.round(((appearance.dialogueBox.lineHeight || 1.5) - 1.1) * 18))}
 `;
 }
@@ -372,10 +396,12 @@ function generateDefinitionsRpy(project: ProjectData): string {
     const defName = charDefineName(ch.id);
     const charFont = resolveAssetRelToGame(project, ch.fontAssetId);
     const avatarPath = resolveAssetRelToGame(project, ch.avatarAssetId);
+    const charBoxBg = resolveAssetRelToGame(project, ch.dialogueBoxBgAssetId);
     const extraArgs: string[] = [
       `who_color="${ch.color || '#FFB399'}"`,
     ];
     if (charFont) extraArgs.push(`what_font="${charFont}"`);
+    if (charBoxBg) extraArgs.push(`window_background=Frame("${charBoxBg}", 0, 0)`);
     if (avatarPath) {
       const sideTag = sanitizeIdentifier(ch.id, 'side');
       lines.push(`image side ${sideTag} = im.Scale("${avatarPath}", 180, 180)`);
@@ -396,6 +422,17 @@ function generateDefinitionsRpy(project: ProjectData): string {
   }
   lines.push('');
 
+  // Dynamic multilingual dialogue translation hook (translates all dialogue/narration when player switches language!)
+  if (project.localization.languages.length > 0) {
+    lines.push('init python:');
+    lines.push('    def _guie_replace_translated_text(s):');
+    lines.push('        if _preferences.language and s:');
+    lines.push('            return renpy.translate_string(s)');
+    lines.push('        return s');
+    lines.push('    config.replace_text = _guie_replace_translated_text');
+    lines.push('');
+  }
+
   // Background, UI, CG, Video image definitions
   for (const asset of project.assets) {
     const rel = resolveAssetRelToGame(project, asset.id);
@@ -405,6 +442,7 @@ function generateDefinitionsRpy(project: ProjectData): string {
       lines.push(`image guie_bg_${tag} = "${rel}"`);
     } else if (asset.category === 'video') {
       lines.push(`image guie_vid_${tag} = Movie(play="${rel}", loop=True)`);
+      lines.push(`image guie_vid_noloop_${tag} = Movie(play="${rel}", loop=False)`);
     }
   }
   lines.push('');
@@ -468,13 +506,14 @@ image guie_particle_petals = SnowBlossom(Solid("#FFB7C5DD", xsize=12, ysize=8), 
 image guie_particle_leaves = SnowBlossom(Solid("#D97736DD", xsize=14, ysize=9), count=30, border=40, xspeed=(-55, 35), yspeed=(55, 110), start=4.0)
 image guie_particle_sparkles = SnowBlossom(Solid("#FFE899DD", xsize=6, ysize=6), count=40, border=30, xspeed=(-12, 12), yspeed=(-40, -15), start=3.0)
 
-# Color grading LUT overlay tints
+# Color grading LUT overlay tints & camera vignette frame
 image guie_lut_warm = Solid("#FF9E4422")
 image guie_lut_cool = Solid("#3B82F622")
 image guie_lut_sepia = Solid("#70421433")
 image guie_lut_noir = Solid("#0F172A44")
 image guie_lut_sunset = Solid("#F9731630")
 image guie_lut_dreamy = Solid("#F472B622")
+image guie_vignette_overlay = Frame(Solid("#00000055"), 80, 60)
 `);
 
   // Generate custom keyframe transforms for sprite blocks with keyframes
@@ -554,6 +593,17 @@ function generateExtensionsRpy(project: ProjectData): string {
     })
     .filter((x): x is NonNullable<typeof x> => x !== null);
 
+  const cardStyle = project.extensions.chapterTitleCard.style || 'minimal';
+  const cardBg =
+    cardStyle === 'ink' ? '#F3F0E8F2' : cardStyle === 'cinematic' ? '#09090BF5' : '#12100EE6';
+  const cardTitleColor = cardStyle === 'ink' ? '#171513' : '#FFFFFF';
+  const cardSubColor = cardStyle === 'cinematic' ? '#F59E0B' : '#FF5A3D';
+
+  const enableCg = project.extensions.galleryAndEndings.enableCgGallery !== false;
+  const enableReplay = project.extensions.galleryAndEndings.enableSceneReplay !== false;
+  const enableEndings = project.extensions.galleryAndEndings.enableEndingBook !== false;
+  const defaultExtrasTab = enableCg ? 'cg' : enableReplay ? 'replay' : 'endings';
+
   const lines: string[] = [
     '# =============================================================',
     '# Auto-generated Real Playable Extensions (Genuine Persistent Unlock & State)',
@@ -593,13 +643,13 @@ function generateExtensionsRpy(project: ProjectData): string {
     'screen guie_chapter_card(chapter_title):',
     '    modal True',
     '    zorder 120',
-    '    add Solid("#12100EE6")',
+    `    add Solid("${cardBg}")`,
     '    vbox:',
     '        xalign 0.5',
     '        yalign 0.5',
     '        spacing 16',
-    '        text _("CHAPTER") size 22 color "#FF5A3D" xalign 0.5',
-    '        text chapter_title size 56 color "#FFFFFF" xalign 0.5',
+    `        text _("CHAPTER") size 22 color "${cardSubColor}" xalign 0.5`,
+    `        text chapter_title size ${cardStyle === 'cinematic' ? 64 : 56} color "${cardTitleColor}" xalign 0.5`,
     `    timer ${Math.max(0.6, project.extensions.chapterTitleCard.duration || 2.2).toFixed(1)} action Return()`,
     '    key "dismiss" action Return()',
     '',
@@ -624,16 +674,17 @@ function generateExtensionsRpy(project: ProjectData): string {
     '# Extension: Genuine Unlocked CG Gallery / Scene Replay / Ending Collection',
     'screen guie_extras_screen():',
     '    tag menu',
-    '    default extras_tab = "cg"',
+    `    default extras_tab = "${defaultExtrasTab}"`,
+    '    default viewing_cg = None',
     '    add Solid(guie_menu_bg_color)',
     '    vbox:',
     '        xpos 64 ypos 48 spacing 24 xsize config.screen_width - 128',
     '        hbox:',
     '            spacing 24',
     '            text _("鉴赏与收集册") size 40 color "#FFFFFF"',
-    '            textbutton _("CG 鉴赏") action SetScreenVariable("extras_tab", "cg")',
-    '            textbutton _("已读回想") action SetScreenVariable("extras_tab", "replay")',
-    '            textbutton _("结局收集") action SetScreenVariable("extras_tab", "endings")',
+    ...(enableCg ? ['            textbutton _("CG 鉴赏") action SetScreenVariable("extras_tab", "cg")'] : []),
+    ...(enableReplay ? ['            textbutton _("已读回想") action SetScreenVariable("extras_tab", "replay")'] : []),
+    ...(enableEndings ? ['            textbutton _("结局收集") action SetScreenVariable("extras_tab", "endings")'] : []),
     '            textbutton _("返回") action Return()',
     '        if extras_tab == "cg":',
     '            if not GUIE_CG_LIST:',
@@ -643,13 +694,18 @@ function generateExtensionsRpy(project: ProjectData): string {
     '                    cols 3 spacing 24',
     '                    for cg_id, cg_title, cg_path in GUIE_CG_LIST:',
     '                        if cg_id in persistent.guie_unlocked_cgs:',
-    '                            vbox:',
-    '                                spacing 8',
-    '                                add im.Scale(cg_path, 380, 214)',
-    '                                text cg_title size 22 color "#FFFFFF"',
+    '                            button:',
+    '                                background Solid("#26221E")',
+    '                                hover_background Solid("#3A332D")',
+    '                                padding (10, 10)',
+    '                                action SetScreenVariable("viewing_cg", cg_path)',
+    '                                vbox:',
+    '                                    spacing 8',
+    '                                    add im.Scale(cg_path, 380, 214)',
+    '                                    text cg_title size 22 color "#FFFFFF"',
     '                        else:',
     '                            frame:',
-    '                                xsize 380 ysize 214 background Solid("#2A2622")',
+    '                                xsize 400 ysize 254 background Solid("#2A2622")',
     '                                text _("未解锁") xalign 0.5 yalign 0.5 color "#888888" size 24',
     '        elif extras_tab == "replay":',
     '            text _("已解锁回想：%d / %d") % (len([x for x in GUIE_REPLAY_SCENES if x[0] in persistent.guie_seen_scenes]), len(GUIE_REPLAY_SCENES)) color "#FFB399" size 24',
@@ -678,6 +734,11 @@ function generateExtensionsRpy(project: ProjectData): string {
     '                        frame:',
     '                            padding (24, 16) background Solid("#1E1B18") xfill True',
     '                            text _("未达成结局 ？？？") size 24 color "#777777"',
+    '    if viewing_cg:',
+    '        button:',
+    '            xfill True yfill True background Solid("#000000E8")',
+    '            action SetScreenVariable("viewing_cg", None)',
+    '            add viewing_cg xalign 0.5 yalign 0.5',
     '',
     '# Extension: Character Affection Progress Screen',
     'screen guie_affection_screen():',
@@ -702,7 +763,7 @@ function generateExtensionsRpy(project: ProjectData): string {
       lines.push(`                hbox:`);
       lines.push(`                    spacing 16`);
       lines.push(`                    text "${tr.charName}" size 28 color "${tr.color}"`);
-      lines.push(`                    text "${tr.label}：[%s / ${tr.maxVal}]" % (${tr.pyVar}) size 24 color "#FFFFFF"`);
+      lines.push(`                    text ("${tr.label}：%s / ${tr.maxVal}" % (${tr.pyVar})) substitute False size 24 color "#FFFFFF"`);
       lines.push(`                bar value StaticValue(max(0, min(${tr.maxVal}, int(${tr.pyVar}))), ${tr.maxVal}) xsize 640 ysize 18`);
     }
   }
@@ -782,6 +843,8 @@ screen say(who, what):
             size gui.text_size
             font gui.text_font
             color gui.text_color
+            bold guie_text_bold
+            kerning guie_text_kerning
             line_spacing guie_line_spacing
             drop_shadow guie_text_shadow_offset
             drop_shadow_color guie_text_shadow_color
@@ -795,7 +858,8 @@ screen choice(items):
         yalign 0.45
         spacing 18
         for i in items:
-            textbutton i.caption action i.action
+            $ _item_sens = i.kwargs.get("sensitive", True)
+            textbutton i.caption action (i.action if _item_sens else None) sensitive _item_sens
 
 screen quick_menu():
     zorder 100
@@ -880,11 +944,22 @@ screen file_slots(title):
                         hover_background Solid("#3A332D")
                         padding (14, 14)
                         action FileAction(slot)
-                        vbox:
+${
+  project.extensions.sixSlotSaveScreen.enabled
+    ? `                        vbox:
                             spacing 6
                             add FileScreenshot(slot) xalign 0.5
                             text FileTime(slot, format=_("%Y-%m-%d %H:%M"), empty=_("空存档槽位")) size 18 color "#E5DFD3"
-                            text FileSaveName(slot) size 16 color "#FFB399"
+                            text FileSaveName(slot) size 16 color "#FFB399"`
+    : `                        hbox:
+                            spacing 14
+                            add FileScreenshot(slot) yalign 0.5
+                            vbox:
+                                yalign 0.5
+                                spacing 6
+                                text FileTime(slot, format=_("%Y-%m-%d %H:%M"), empty=_("空存档槽位")) size 18 color "#E5DFD3"
+                                text FileSaveName(slot) size 16 color "#FFB399"`
+}
 
 screen history():
     tag menu
@@ -1070,6 +1145,9 @@ function compileBlock(
     case 'dialogue': {
       const voiceRel = resolveAssetRelToGame(project, blk.voiceAssetId);
       if (voiceRel) {
+        if (blk.voiceVolume !== undefined && blk.voiceVolume >= 0 && blk.voiceVolume <= 1) {
+          out.push(`    $ renpy.music.set_volume(${blk.voiceVolume.toFixed(2)}, channel="voice")`);
+        }
         out.push(`    voice "${voiceRel}"`);
       }
       const ch = blk.speakerId ? project.characters.find((c) => c.id === blk.speakerId) : null;
@@ -1183,6 +1261,7 @@ function compileBlock(
         out.push('    hide guie_particle_leaves');
         out.push('    hide guie_particle_sparkles');
         out.push('    hide guie_lut_overlay');
+        out.push('    hide guie_vignette_overlay');
         break;
       }
       out.push('    camera:');
@@ -1196,6 +1275,12 @@ function compileBlock(
         out.push(`    show guie_lut_${blk.lutPreset} as guie_lut_overlay zorder 80`);
       } else {
         out.push('    hide guie_lut_overlay');
+      }
+      if (blk.vignette > 0.05) {
+        out.push(`    show guie_vignette_overlay zorder 82:`);
+        out.push(`        alpha ${Math.min(1, blk.vignette).toFixed(2)}`);
+      } else {
+        out.push('    hide guie_vignette_overlay');
       }
       for (const p of ['snow', 'rain', 'petals', 'leaves', 'sparkles'] as const) {
         if (blk.particles === p) {
@@ -1218,7 +1303,16 @@ function compileBlock(
       if (!rel) break;
       const vol = blk.volume !== undefined ? ` volume ${blk.volume.toFixed(2)}` : '';
       const fi = blk.fadeIn ? ` fadein ${blk.fadeIn.toFixed(2)}` : '';
-      const loopPart = blk.channel === 'bgm' ? (blk.loop === false ? ' noloop' : ' loop') : '';
+      const loopPart =
+        blk.channel === 'bgm'
+          ? blk.loop === false
+            ? ' noloop'
+            : ' loop'
+          : blk.channel === 'se'
+          ? blk.loop === true
+            ? ' loop'
+            : ' noloop'
+          : '';
       const verb = blk.action === 'queue' ? 'queue' : 'play';
       out.push(`    ${verb} ${chName} "${rel}"${vol}${fi}${loopPart}`);
       break;
@@ -1227,12 +1321,16 @@ function compileBlock(
     case 'video': {
       const rel = resolveAssetRelToGame(project, blk.assetId);
       if (!rel) break;
+      const tag = sanitizeIdentifier(blk.assetId, 'ast');
+      const vidImg = blk.loop === false ? `guie_vid_noloop_${tag}` : `guie_vid_${tag}`;
       if (blk.mode === 'fullscreen') {
-        out.push(`    $ renpy.movie_cutscene("${rel}")`);
+        out.push(
+          `    $ renpy.movie_cutscene("${rel}", delay=${blk.skippable === false ? 'None' : 'None'}, loops=${blk.loop ? '-1' : '0'})`
+        );
       } else if (blk.mode === 'background_loop') {
-        out.push(`    scene guie_vid_${sanitizeIdentifier(blk.assetId, 'ast')}`);
+        out.push(`    scene ${vidImg}`);
       } else {
-        out.push(`    show guie_vid_${sanitizeIdentifier(blk.assetId, 'ast')} at guie_slot_center`);
+        out.push(`    show ${vidImg} at guie_slot_center`);
       }
       break;
     }

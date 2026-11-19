@@ -19,6 +19,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "node scripts/run-e2e.mjs",
+    "test:matrix": "node scripts/test-all-features-e2e.mjs",
     "screenshots": "node scripts/capture-screenshots.mjs",
     "typecheck": "tsc --noEmit"
   },

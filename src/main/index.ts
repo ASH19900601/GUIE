@@ -14,6 +14,7 @@ import {
   listSnapshots,
   loadRecentProjects,
   openProject,
+  previewSnapshot,
   readAdvancedProjectFile,
   removeRecentProject,
   restoreSnapshot,
@@ -185,6 +186,9 @@ function registerIpcHandlers(): void {
 
   // Snapshots
   ipcMain.handle('guie:listSnapshots', (_e, projectDir: string) => listSnapshots(projectDir));
+  ipcMain.handle('guie:previewSnapshot', (_e, projectDir: string, snapshotId: string) =>
+    previewSnapshot(projectDir, snapshotId)
+  );
   ipcMain.handle(
     'guie:createSnapshot',
     (_e, projectDir: string, project: ProjectData, label: string, kind: ProjectSnapshotMeta['kind']) =>

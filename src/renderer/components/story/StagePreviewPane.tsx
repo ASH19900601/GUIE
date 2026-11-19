@@ -16,12 +16,12 @@ import {
 } from 'lucide-react';
 import type { ChoiceOption, ParticlePreset, PreviewStageState, TimelineStep } from '@shared/types';
 import {
+  advancePreviewStep,
   applyBlockToStage,
-  createEmptyStage,
-  getInitialVariables,
   resolveChoiceNavigation,
-  simulateStageAtBlock,
+  simulateSceneTimeline,
   summarizeBlockForTimeline,
+  type CallReturnFrame,
 } from '@shared/previewEngine';
 import { useAppStore } from '../../store/useAppStore';
 
@@ -67,25 +67,42 @@ export const StagePreviewPane: React.FC<StagePreviewPaneProps> = ({ onJumpToCard
 
   // Interactive timeline playback state (allows stepping across scenes & choices cleanly without reload loops!)
   const [interactiveSteps, setInteractiveSteps] = useState<TimelineStep[] | null>(null);
+  const [returnStack, setReturnStack] = useState<CallReturnFrame[]>([]);
   const [scrubIndex, setScrubIndex] = useState<number>(0);
+  const [nameInputDraft, setNameInputDraft] = useState<string>('');
+  const isInternalSyncRef = useRef(false);
 
   // Sync from clicked editor card -> instant stage simulation (Bidirectional sync #1)
   const baseSim = useMemo(() => {
     if (!project || !activeSceneId) return null;
-    return simulateStageAtBlock(project, activeSceneId, selectedBlockId, previewOverrides);
+    return simulateSceneTimeline(project, activeSceneId, selectedBlockId, previewOverrides);
   }, [project, activeSceneId, selectedBlockId, previewOverrides]);
 
-  // Reset interactive scrub when user selects a different card in editor
+  // Reset interactive scrub ONLY when user externally clicks a card in editor (NEVER when preview itself scrubs/steps!)
   useEffect(() => {
-    setInteractiveSteps(null);
-    if (baseSim) {
-      setScrubIndex(Math.max(0, baseSim.steps.length - 1));
+    if (isInternalSyncRef.current) {
+      isInternalSyncRef.current = false;
+      return;
     }
-  }, [activeSceneId, selectedBlockId, baseSim?.steps.length]);
+    setInteractiveSteps(null);
+    setReturnStack([]);
+    if (baseSim) {
+      setScrubIndex(baseSim.targetStepIndex);
+    }
+  }, [activeSceneId, selectedBlockId]);
 
+  // Keep player name input draft synced when entering a player_name_input block
   const activeSteps = interactiveSteps ?? baseSim?.steps ?? [];
   const currentStep = activeSteps[Math.min(scrubIndex, Math.max(0, activeSteps.length - 1))];
   const stage: PreviewStageState | null = currentStep?.stageSnapshot ?? baseSim?.stage ?? null;
+
+  useEffect(() => {
+    if (stage?.activeNameInput) {
+      setNameInputDraft(
+        String(previewOverrides.__player_name__ ?? stage.activeNameInput.defaultName ?? '主角')
+      );
+    }
+  }, [currentStep?.blockId]);
 
   if (!project || !projectDir) return null;
 
@@ -96,13 +113,22 @@ export const StagePreviewPane: React.FC<StagePreviewPaneProps> = ({ onJumpToCard
     return window.guie.getAssetUrl(projectDir, asset.relativePath);
   };
 
-  // Bidirectional sync #2: User scrubs timeline -> jump & highlight card in center editor!
+  const syncEditorFromPreview = (sceneId: string, blockId: string) => {
+    isInternalSyncRef.current = true;
+    onJumpToCard(sceneId, blockId);
+  };
+
+  // Bidirectional sync #2: User scrubs timeline -> jump & highlight card in center editor WITHOUT truncating steps!
   const handleScrub = (nextIdx: number) => {
     const clamped = Math.max(0, Math.min(activeSteps.length - 1, nextIdx));
+    // Freeze current steps into interactiveSteps so scrubbing backward preserves forward steps!
+    if (!interactiveSteps && activeSteps.length > 0) {
+      setInteractiveSteps(activeSteps);
+    }
     setScrubIndex(clamped);
     const step = activeSteps[clamped];
     if (step) {
-      onJumpToCard(step.sceneId, step.blockId);
+      syncEditorFromPreview(step.sceneId, step.blockId);
     }
   };
 
@@ -151,6 +177,18 @@ export const StagePreviewPane: React.FC<StagePreviewPaneProps> = ({ onJumpToCard
           targetBlk,
           project
         );
+        if (option.targetType === 'call_scene') {
+          const curScene = project.scenes.find((s) => s.id === currentStep.sceneId);
+          const curIdx = curScene?.blocks.findIndex((b) => b.id === currentStep.blockId) ?? 0;
+          setReturnStack((prev) => [
+            ...prev,
+            {
+              sceneId: currentStep.sceneId,
+              sceneName: currentStep.sceneName,
+              nextBlockIndex: curIdx + 1,
+            },
+          ]);
+        }
         const nextStep: TimelineStep = {
           index: existingPrefix.length,
           sceneId: targetScene.id,
@@ -168,50 +206,38 @@ export const StagePreviewPane: React.FC<StagePreviewPaneProps> = ({ onJumpToCard
         const combined = [...existingPrefix, nextStep];
         setInteractiveSteps(combined);
         setScrubIndex(combined.length - 1);
-        onJumpToCard(targetScene.id, targetBlk.id);
+        syncEditorFromPreview(targetScene.id, targetBlk.id);
       }
     }
   };
 
-  // Step forward to next block in scene inside Instant Preview
+  // Step forward cleanly through condition_branch, jump_scene, call_scene, return_from_call, or nextSceneId!
   const handleStepNext = () => {
     if (!currentStep || !stage) return;
+    if (stage.activeChoice) return; // Wait for creator to click one of the choices
     if (scrubIndex < activeSteps.length - 1) {
       handleScrub(scrubIndex + 1);
       return;
     }
-    const sc = project.scenes.find((s) => s.id === currentStep.sceneId);
-    if (!sc) return;
-    const idx = sc.blocks.findIndex((b) => b.id === currentStep.blockId);
-    let nextScene = sc;
-    let nextBlk = idx >= 0 && idx + 1 < sc.blocks.length ? sc.blocks[idx + 1] : null;
-    if (!nextBlk && sc.nextSceneId) {
-      const candidate = project.scenes.find((s) => s.id === sc.nextSceneId);
-      if (candidate && candidate.blocks[0]) {
-        nextScene = candidate;
-        nextBlk = candidate.blocks[0];
-      }
-    }
-    if (!nextBlk) return;
-    const nextStage = applyBlockToStage(structuredClone(stage), nextBlk, project);
-    const nextStep: TimelineStep = {
-      index: activeSteps.length,
-      sceneId: nextScene.id,
-      sceneName: nextScene.name,
-      blockId: nextBlk.id,
-      summary: summarizeBlockForTimeline(nextBlk, project),
-      variablesSnapshot: nextStage.variables,
-      callStack: [nextScene.name],
-      stageSnapshot: nextStage,
-    };
+    const { nextStep, nextReturnStack } = advancePreviewStep(
+      project,
+      currentStep,
+      stage,
+      returnStack
+    );
+    if (!nextStep) return;
+    nextStep.index = activeSteps.length;
     const combined = [...activeSteps, nextStep];
+    setReturnStack(nextReturnStack);
     setInteractiveSteps(combined);
     setScrubIndex(combined.length - 1);
-    onJumpToCard(nextScene.id, nextBlk.id);
+    syncEditorFromPreview(nextStep.sceneId, nextStep.blockId);
   };
 
   const bgSrc = getAssetSrc(stage?.backgroundAssetId);
-  const boxBgSrc = getAssetSrc(project.appearance.dialogueBox.backgroundAssetId);
+  const boxBgSrc = getAssetSrc(
+    stage?.speakerDialogueBoxBgAssetId ?? project.appearance.dialogueBox.backgroundAssetId
+  );
   const avatarSrc = getAssetSrc(stage?.speakerAvatarAssetId);
   const boxStyle = project.appearance.dialogueBox;
   const btnStyle = project.appearance.buttons;
@@ -459,8 +485,8 @@ export const StagePreviewPane: React.FC<StagePreviewPaneProps> = ({ onJumpToCard
             {/* Ending Overlay */}
             {stage?.activeEnding && (
               <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center text-center px-6 z-20">
-                <div className="text-[10px] tracking-widest text-[#FF5A3D] uppercase mb-1">
-                  ENDING REACHED
+                <div className="text-[10.5px] tracking-widest text-[#FF5A3D] mb-1">
+                  达成结局
                 </div>
                 <div className="text-[18px] font-bold text-white">{stage.activeEnding.title}</div>
                 {stage.activeEnding.subtitle && (
@@ -469,15 +495,31 @@ export const StagePreviewPane: React.FC<StagePreviewPaneProps> = ({ onJumpToCard
               </div>
             )}
 
-            {/* Player Name Input Overlay */}
+            {/* Interactive Player Name Input Overlay */}
             {stage?.activeNameInput && (
               <div className="absolute inset-0 bg-black/65 flex items-center justify-center z-20">
-                <div className="bg-[#221E1B] border border-white/20 rounded-md px-4 py-3 text-center w-[240px]">
-                  <div className="text-[11.5px] text-white mb-2">{stage.activeNameInput.prompt}</div>
-                  <div className="bg-black/40 border border-white/25 rounded px-2 py-1 text-[11.5px] text-[#FFB399]">
-                    {stage.activeNameInput.defaultName}
-                  </div>
-                </div>
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    setPreviewOverride('__player_name__', nameInputDraft.trim() || stage.activeNameInput!.defaultName);
+                    handleStepNext();
+                  }}
+                  className="bg-[#221E1B] border border-white/20 rounded-md px-4 py-3 text-center w-[250px] flex flex-col gap-2"
+                >
+                  <div className="text-[11.5px] text-white">{stage.activeNameInput.prompt}</div>
+                  <input
+                    type="text"
+                    value={nameInputDraft}
+                    onChange={(e) => setNameInputDraft(e.target.value)}
+                    className="bg-black/45 border border-white/25 rounded px-2 py-1 text-[11.5px] text-[#FFB399] text-center focus:outline-none focus:border-[#FF5A3D]"
+                  />
+                  <button
+                    type="submit"
+                    className="bg-[#FF5A3D] hover:bg-[#E5482C] text-white text-[11px] py-1 rounded cursor-pointer"
+                  >
+                    确认名字并继续预览
+                  </button>
+                </form>
               </div>
             )}
 

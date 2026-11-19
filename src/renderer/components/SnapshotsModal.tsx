@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
-import { History, RotateCcw, Plus, X, ShieldCheck, Clock } from 'lucide-react';
+import { History, RotateCcw, Plus, X, ShieldCheck, Clock, Eye } from 'lucide-react';
+import type { SnapshotPreviewData } from '@shared/types';
 import { useAppStore } from '../store/useAppStore';
 
 export const SnapshotsModal: React.FC = () => {
   const {
+    projectDir,
     snapshotsOpen,
     snapshots,
     setSnapshotsOpen,
@@ -12,8 +14,27 @@ export const SnapshotsModal: React.FC = () => {
   } = useAppStore();
   const [label, setLabel] = useState('');
   const [busy, setBusy] = useState(false);
+  const [previewId, setPreviewId] = useState<string | null>(null);
+  const [previewData, setPreviewData] = useState<SnapshotPreviewData | null>(null);
 
   if (!snapshotsOpen) return null;
+
+  const handleTogglePreview = async (id: string) => {
+    if (previewId === id) {
+      setPreviewId(null);
+      setPreviewData(null);
+      return;
+    }
+    if (!projectDir) return;
+    try {
+      const data = await window.guie.previewSnapshot(projectDir, id);
+      setPreviewId(id);
+      setPreviewData(data);
+    } catch {
+      setPreviewId(null);
+      setPreviewData(null);
+    }
+  };
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -80,48 +101,87 @@ export const SnapshotsModal: React.FC = () => {
             <div className="py-12 text-center text-[#706A60] text-[13px]">暂无历史快照</div>
           ) : (
             snapshots.map((snap) => (
-              <div
-                key={snap.id}
-                className="paper-card p-3.5 flex items-center justify-between gap-3"
-              >
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`text-[11px] px-1.5 py-0.5 rounded font-medium ${
-                        snap.kind === 'milestone'
-                          ? 'bg-[#FFF1ED] text-[#FF5A3D] border border-[#FBCBC1]'
+              <div key={snap.id} className="paper-card p-3.5 flex flex-col gap-2.5">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`text-[11px] px-1.5 py-0.5 rounded font-medium ${
+                          snap.kind === 'milestone'
+                            ? 'bg-[#FFF1ED] text-[#FF5A3D] border border-[#FBCBC1]'
+                            : snap.kind === 'manual'
+                            ? 'bg-[#EDF7F1] text-[#2A7B50] border border-[#C6E6D3]'
+                            : 'bg-[#EFECE3] text-[#706A60]'
+                        }`}
+                      >
+                        {snap.kind === 'milestone'
+                          ? '里程碑'
                           : snap.kind === 'manual'
-                          ? 'bg-[#EDF7F1] text-[#2A7B50] border border-[#C6E6D3]'
-                          : 'bg-[#EFECE3] text-[#706A60]'
+                          ? '手动命名'
+                          : '自动快照'}
+                      </span>
+                      <span className="font-medium text-[13px] text-[#171513] truncate">
+                        {snap.label}
+                      </span>
+                    </div>
+                    <div className="text-[11.5px] text-[#706A60] mt-1 flex items-center gap-3">
+                      <span className="inline-flex items-center gap-1">
+                        <Clock size={12} />
+                        {new Date(snap.createdAt).toLocaleString('zh-CN')}
+                      </span>
+                      <span>{snap.sceneCount} 个场景</span>
+                      <span>{snap.blockCount} 项剧情卡片</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      data-testid={`preview-snap-${snap.id}`}
+                      onClick={() => void handleTogglePreview(snap.id)}
+                      className={`paper-btn-secondary px-2.5 py-1.5 text-[12px] inline-flex items-center gap-1 ${
+                        previewId === snap.id ? 'border-[#FF5A3D] text-[#FF5A3D]' : ''
                       }`}
                     >
-                      {snap.kind === 'milestone'
-                        ? '里程碑'
-                        : snap.kind === 'manual'
-                        ? '手动命名'
-                        : '自动快照'}
-                    </span>
-                    <span className="font-medium text-[13px] text-[#171513] truncate">
-                      {snap.label}
-                    </span>
-                  </div>
-                  <div className="text-[11.5px] text-[#706A60] mt-1 flex items-center gap-3">
-                    <span className="inline-flex items-center gap-1">
-                      <Clock size={12} />
-                      {new Date(snap.createdAt).toLocaleString('zh-CN')}
-                    </span>
-                    <span>{snap.sceneCount} 个场景</span>
-                    <span>{snap.blockCount} 项剧情卡片</span>
+                      <Eye size={13} />
+                      {previewId === snap.id ? '收起预览' : '预览内容'}
+                    </button>
+                    <button
+                      disabled={busy}
+                      onClick={() => void handleRestore(snap.id)}
+                      className="paper-btn-secondary px-3 py-1.5 text-[12px] inline-flex items-center gap-1"
+                    >
+                      <RotateCcw size={13} />
+                      回退到此版本
+                    </button>
                   </div>
                 </div>
-                <button
-                  disabled={busy}
-                  onClick={() => void handleRestore(snap.id)}
-                  className="paper-btn-secondary px-3 py-1.5 text-[12px] inline-flex items-center gap-1 shrink-0"
-                >
-                  <RotateCcw size={13} />
-                  回退到此版本
-                </button>
+
+                {previewId === snap.id && previewData && (
+                  <div className="p-3 rounded bg-[#FBFAF5] border border-[#E7E2D8] text-[12px] flex flex-col gap-2">
+                    <div className="flex flex-wrap gap-3 text-[#706A60]">
+                      <span>标题：<strong className="text-[#171513]">{previewData.title}</strong></span>
+                      <span>章节：{previewData.chapters.length}</span>
+                      <span>角色：{previewData.characters.map((c) => c.name).join('、') || '暂无'}</span>
+                      <span>状态变量：{previewData.variableCount}</span>
+                      <span>素材：{previewData.assetCount}</span>
+                      {previewData.customFileCount > 0 && (
+                        <span className="text-[#FF5A3D]">含 {previewData.customFileCount} 个 AI 定制扩展模块</span>
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-1 max-h-[120px] overflow-y-auto paper-scroll">
+                      {previewData.scenes.map((sc) => (
+                        <div key={sc.id} className="text-[11.5px] text-[#565149] flex items-center gap-2">
+                          <span className="font-medium text-[#171513] shrink-0">
+                            {sc.name} ({sc.blockCount} 项)
+                          </span>
+                          {sc.sampleLine && (
+                            <span className="text-[#706A60] truncate">— {sc.sampleLine}</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             ))
           )}

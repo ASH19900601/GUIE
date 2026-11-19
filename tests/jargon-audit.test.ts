@@ -36,8 +36,11 @@ describe('Creator Mode Visual & Terminology Discipline Audit (Req 1.4 & 6.1)', (
       /\bEndpoint\b/i,
       /\bProvider ID\b/i,
       /\bFunction Calling\b/i,
-      /\bSDK\s*路径/,
+      /\bSDK\b/,
       /\bDiff\b/,
+      /堆栈信息|栈追踪|Stack\s*Trace/i,
+      /命令行|终端命令/,
+      /affection\s*>=/,
     ];
     for (const file of files) {
       const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/);

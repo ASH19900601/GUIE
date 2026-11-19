@@ -556,6 +556,17 @@ export interface ProjectSnapshotMeta {
   blockCount: number;
 }
 
+export interface SnapshotPreviewData {
+  meta: ProjectSnapshotMeta;
+  title: string;
+  chapters: Array<{ id: string; name: string; disabled: boolean }>;
+  scenes: Array<{ id: string; name: string; blockCount: number; sampleLine?: string }>;
+  characters: Array<{ id: string; name: string; expressionCount: number }>;
+  variableCount: number;
+  assetCount: number;
+  customFileCount: number;
+}
+
 export interface ProjectIssue {
   id: string;
   severity: 'error' | 'warning';
@@ -683,6 +694,7 @@ export interface PreviewStageState {
   speakerName: string | null;
   speakerColor: string;
   speakerAvatarAssetId?: string | null;
+  speakerDialogueBoxBgAssetId?: string | null;
   text: string;
   nvlMode: boolean;
   nvlHistory: Array<{ speaker: string | null; text: string; color: string }>;

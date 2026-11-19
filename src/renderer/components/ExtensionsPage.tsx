@@ -163,27 +163,67 @@ export const ExtensionsPage: React.FC = () => {
 
             {ext.affectionSystem.enabled && (
               <div className="pt-2.5 border-t border-[#EFECE3] flex flex-col gap-2">
-                <div className="flex items-center justify-between text-[12px]">
+                <div className="flex items-center justify-between gap-2 text-[12px] flex-wrap">
                   <span className="font-medium">已绑定的角色好感度轨道</span>
-                  <button
-                    disabled={project.characters.length === 0 || project.variables.filter((v) => v.type === 'number').length === 0}
-                    onClick={() => {
-                      const ch = project.characters[0];
-                      const numVar = project.variables.find((v) => v.type === 'number');
-                      if (!ch || !numVar) return;
-                      mutateProject((d) => {
-                        d.extensions.affectionSystem.tracks.push({
-                          characterId: ch.id,
-                          variableId: numVar.id,
-                          maxVal: 10,
-                          label: `${ch.name}好感度`,
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      disabled={project.characters.length === 0}
+                      onClick={() => {
+                        mutateProject((d) => {
+                          for (const ch of d.characters) {
+                            if (d.extensions.affectionSystem.tracks.some((t) => t.characterId === ch.id)) {
+                              continue;
+                            }
+                            let affVar = d.variables.find(
+                              (v) => v.type === 'number' && v.linkedCharacterId === ch.id
+                            );
+                            if (!affVar) {
+                              affVar = {
+                                id: `var_aff_${ch.id.slice(-6)}_${Date.now().toString(36).slice(-3)}`,
+                                name: `${ch.name}好感度`,
+                                type: 'number',
+                                initialValue: 0,
+                                persistent: true,
+                                category: 'affection',
+                                linkedCharacterId: ch.id,
+                                description: `${ch.name} 的跨周目持久好感度`,
+                              };
+                              d.variables.push(affVar);
+                            }
+                            d.extensions.affectionSystem.tracks.push({
+                              characterId: ch.id,
+                              variableId: affVar.id,
+                              maxVal: 10,
+                              label: `${ch.name}好感度`,
+                            });
+                          }
                         });
-                      });
-                    }}
-                    className="paper-btn-secondary px-2 py-0.5 text-[11.5px] inline-flex items-center gap-1"
-                  >
-                    <Plus size={11} /> 添加轨道
-                  </button>
+                        pushToast('success', '已为全部角色自动生成跨周目持久好感度轨道');
+                      }}
+                      className="paper-btn-secondary px-2 py-0.5 text-[11.5px]"
+                    >
+                      一键为全部角色生成
+                    </button>
+                    <button
+                      disabled={project.characters.length === 0 || project.variables.filter((v) => v.type === 'number').length === 0}
+                      onClick={() => {
+                        const ch = project.characters[0];
+                        const numVar = project.variables.find((v) => v.type === 'number');
+                        if (!ch || !numVar) return;
+                        mutateProject((d) => {
+                          d.extensions.affectionSystem.tracks.push({
+                            characterId: ch.id,
+                            variableId: numVar.id,
+                            maxVal: 10,
+                            label: `${ch.name}好感度`,
+                          });
+                        });
+                      }}
+                      className="paper-btn-secondary px-2 py-0.5 text-[11.5px] inline-flex items-center gap-1"
+                    >
+                      <Plus size={11} /> 添加轨道
+                    </button>
+                  </div>
                 </div>
                 {ext.affectionSystem.tracks.length === 0 ? (
                   <div className="text-[11.5px] text-[#948D82]">
@@ -383,21 +423,39 @@ export const ExtensionsPage: React.FC = () => {
               />
             </div>
             {ext.chapterTitleCard.enabled && (
-              <div className="pt-2.5 border-t border-[#EFECE3] flex items-center gap-3 text-[12px]">
-                <span className="text-[#706A60]">停留时长（秒）：</span>
-                <input
-                  type="number"
-                  step={0.2}
-                  min={0.8}
-                  max={6}
-                  value={ext.chapterTitleCard.duration}
-                  onChange={(e) =>
-                    mutateProject((d) => {
-                      d.extensions.chapterTitleCard.duration = Number(e.target.value);
-                    })
-                  }
-                  className="paper-input w-20 py-1"
-                />
+              <div className="pt-2.5 border-t border-[#EFECE3] flex items-center gap-4 flex-wrap text-[12px]">
+                <div className="flex items-center gap-2">
+                  <span className="text-[#706A60]">停留时长（秒）：</span>
+                  <input
+                    type="number"
+                    step={0.2}
+                    min={0.8}
+                    max={6}
+                    value={ext.chapterTitleCard.duration}
+                    onChange={(e) =>
+                      mutateProject((d) => {
+                        d.extensions.chapterTitleCard.duration = Number(e.target.value);
+                      })
+                    }
+                    className="paper-input w-20 py-1"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[#706A60]">画面风格：</span>
+                  <select
+                    value={ext.chapterTitleCard.style}
+                    onChange={(e) =>
+                      mutateProject((d) => {
+                        d.extensions.chapterTitleCard.style = e.target.value as 'minimal' | 'cinematic' | 'ink';
+                      })
+                    }
+                    className="paper-input py-1 text-[12px]"
+                  >
+                    <option value="minimal">极简深幕</option>
+                    <option value="cinematic">电影黑金</option>
+                    <option value="ink">素雅暖纸</option>
+                  </select>
+                </div>
               </div>
             )}
           </div>

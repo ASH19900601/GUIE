@@ -15,6 +15,7 @@ import type {
   RecentProjectItem,
   ReuseItemKind,
   ReuseLibraryItem,
+  SnapshotPreviewData,
 } from './types';
 
 export interface GuieBridgeApi {
@@ -33,6 +34,7 @@ export interface GuieBridgeApi {
     filters?: Array<{ name: string; extensions: string[] }>;
   }) => Promise<string[]>;
   openPathInExplorer: (targetPath: string) => Promise<void>;
+  getPathForFile: (file: File) => string;
 
   // Project Lifecycle & Safe Save Queue
   listRecentProjects: () => Promise<RecentProjectItem[]>;
@@ -68,6 +70,7 @@ export interface GuieBridgeApi {
 
   // Snapshots (Cross-restart history)
   listSnapshots: (projectDir: string) => Promise<ProjectSnapshotMeta[]>;
+  previewSnapshot: (projectDir: string, snapshotId: string) => Promise<SnapshotPreviewData>;
   createSnapshot: (
     projectDir: string,
     project: ProjectData,

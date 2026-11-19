@@ -286,7 +286,7 @@ export const CharactersPage: React.FC = () => {
           onDrop={(e) => {
             e.preventDefault();
             const paths = Array.from(e.dataTransfer.files)
-              .map((f) => (f as File & { path?: string }).path)
+              .map((f) => window.guie.getPathForFile(f))
               .filter((p): p is string => Boolean(p));
             if (paths.length > 0) void handleBatchImportSprites(paths);
           }}

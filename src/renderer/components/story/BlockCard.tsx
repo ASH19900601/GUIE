@@ -54,7 +54,7 @@ interface BlockCardProps {
   hasError?: boolean;
   autoFocusTrigger?: boolean;
   onSelect: () => void;
-  onUpdate: (next: StoryBlock) => void;
+  onUpdate: (next: StoryBlock, coalesceKey?: string) => void;
   onDelete: () => void;
   onDuplicate: () => void;
   onMoveToIndex: (targetZeroBasedIndex: number) => void;
@@ -91,10 +91,15 @@ export const BlockCard: React.FC<BlockCardProps> = ({
 
   // Local buffered text for ultra-responsive dialogue typing + strict zero-data-loss draft flushing!
   const [localText, setLocalText] = useState(block.type === 'dialogue' ? block.text : '');
+  const [richColor, setRichColor] = useState('#FF5A3D');
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const dirtyRef = useRef(false);
   const latestLocalTextRef = useRef(localText);
+  const latestBlockRef = useRef(block);
+  const latestOnUpdateRef = useRef(onUpdate);
   latestLocalTextRef.current = localText;
+  latestBlockRef.current = block;
+  latestOnUpdateRef.current = onUpdate;
 
   useEffect(() => {
     if (block.type === 'dialogue' && !dirtyRef.current) {
@@ -110,29 +115,32 @@ export const BlockCard: React.FC<BlockCardProps> = ({
     }
   }, [autoFocusTrigger]);
 
-  // Register draft flusher so switching scenes/nav/home/playtest NEVER loses typed characters!
+  // Register draft flusher using latestBlockRef (NEVER overwrites speaker/expression/voice with stale closure!)
   useEffect(() => {
     if (block.type !== 'dialogue') return;
     const key = `dlg_${block.id}`;
     const unregister = registerDraftFlusher(() => {
-      if (dirtyRef.current) {
+      if (dirtyRef.current && latestBlockRef.current.type === 'dialogue') {
         dirtyRef.current = false;
         markDraftDirty(key, false);
-        onUpdate({ ...block, text: latestLocalTextRef.current });
+        latestOnUpdateRef.current(
+          { ...latestBlockRef.current, text: latestLocalTextRef.current },
+          key
+        );
       }
     });
     return () => {
       unregister();
       markDraftDirty(key, false);
     };
-  }, [block.id, block.type]);
+  }, [block.id, block.type, markDraftDirty]);
 
   const commitDialogueText = (val: string) => {
     if (block.type !== 'dialogue') return;
     dirtyRef.current = false;
     markDraftDirty(`dlg_${block.id}`, false);
     if (val !== block.text) {
-      onUpdate({ ...block, text: val });
+      onUpdate({ ...block, text: val }, `dlg_${block.id}`);
     }
   };
 
@@ -359,19 +367,43 @@ export const BlockCard: React.FC<BlockCardProps> = ({
                 >
                   <Italic size={12} /> 斜体
                 </button>
-                <button
-                  type="button"
-                  onClick={() => insertRichMarkup('{color=#FF5A3D}', '{/color}')}
-                  className="paper-btn-secondary px-2 py-0.5 inline-flex items-center gap-1"
-                >
-                  <Palette size={12} /> 强调色
-                </button>
+                <div className="inline-flex items-center gap-1">
+                  <input
+                    type="color"
+                    value={richColor}
+                    onChange={(e) => setRichColor(e.target.value)}
+                    title="选择文字颜色"
+                    className="w-5 h-5 rounded border border-[#D7D1C6] cursor-pointer"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => insertRichMarkup(`{color=${richColor}}`, '{/color}')}
+                    className="paper-btn-secondary px-2 py-0.5 inline-flex items-center gap-1"
+                  >
+                    <Palette size={12} /> 套用颜色
+                  </button>
+                </div>
                 <button
                   type="button"
                   onClick={() => insertRichMarkup('{size=+8}', '{/size}')}
                   className="paper-btn-secondary px-2 py-0.5 inline-flex items-center gap-1"
                 >
                   <Type size={12} /> 放大字号
+                </button>
+                <button
+                  type="button"
+                  onClick={() => insertRichMarkup('{size=-6}', '{/size}')}
+                  className="paper-btn-secondary px-2 py-0.5 inline-flex items-center gap-1"
+                >
+                  缩小字号
+                </button>
+                <button
+                  type="button"
+                  onClick={() => insertRichMarkup('{cps=14}', '{/cps}')}
+                  className="paper-btn-secondary px-2 py-0.5 inline-flex items-center gap-1"
+                  title="让选中的片段缓慢打字显示"
+                >
+                  <Gauge size={12} /> 慢速强调
                 </button>
                 <button
                   type="button"
@@ -401,7 +433,7 @@ export const BlockCard: React.FC<BlockCardProps> = ({
                 )}
                 <div className="flex items-center gap-1 ml-auto">
                   <Gauge size={12} className="text-[#706A60]" />
-                  <span>语速</span>
+                  <span>整句语速</span>
                   <input
                     type="number"
                     min={0}
@@ -412,6 +444,21 @@ export const BlockCard: React.FC<BlockCardProps> = ({
                     title="0 表示使用全局默认打字速度"
                   />
                 </div>
+                {block.voiceAssetId && (
+                  <div className="flex items-center gap-1">
+                    <Volume2 size={12} className="text-[#706A60]" />
+                    <span>语音音量 {Math.round((block.voiceVolume ?? 1) * 100)}%</span>
+                    <input
+                      type="range"
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      value={block.voiceVolume ?? 1}
+                      onChange={(e) => onUpdate({ ...block, voiceVolume: Number(e.target.value) })}
+                      className="w-16 accent-[#FF5A3D]"
+                    />
+                  </div>
+                )}
                 <div className="w-full flex items-center gap-2 pt-1 border-t border-[#E7E2D8]">
                   <span className="text-[#706A60]">临时动态说话名：</span>
                   <input
@@ -437,7 +484,7 @@ export const BlockCard: React.FC<BlockCardProps> = ({
                 setLocalText(v);
                 dirtyRef.current = true;
                 markDraftDirty(`dlg_${block.id}`, true);
-                onUpdate({ ...block, text: v });
+                onUpdate({ ...block, text: v }, `dlg_${block.id}`);
               }}
               onBlur={() => commitDialogueText(localText)}
               onKeyDown={(e) => {
@@ -466,8 +513,21 @@ export const BlockCard: React.FC<BlockCardProps> = ({
 
         {block.type === 'choice' && (
           <div className="flex flex-col gap-2.5">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="text-[12px] text-[#706A60] shrink-0">选择提示语：</span>
+              <select
+                value={block.speakerId ?? ''}
+                onChange={(e) => onUpdate({ ...block, speakerId: e.target.value || null })}
+                className="paper-input py-1 px-2 text-[12px] max-w-[120px]"
+                title="提问角色（可选）"
+              >
+                <option value="">旁白提问</option>
+                {project.characters.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
               <input
                 type="text"
                 value={block.prompt ?? ''}
@@ -778,11 +838,12 @@ export const BlockCard: React.FC<BlockCardProps> = ({
                     </button>
                   </div>
                   {(block.keyframes ?? []).map((kf, ki) => (
-                    <div key={kf.id} className="flex items-center gap-1.5 text-[11.5px] mb-1">
-                      <span className="text-[#948D82]">帧{ki + 1}</span>
+                    <div key={kf.id} className="flex items-center flex-wrap gap-1.5 text-[11px] mb-1.5 pb-1 border-b border-[#EFECE3] last:border-none">
+                      <span className="text-[#948D82] font-medium">帧{ki + 1}</span>
                       <input
                         type="number"
                         step={0.1}
+                        min={0.05}
                         value={kf.timeSec}
                         onChange={(e) =>
                           onUpdate({
@@ -792,7 +853,7 @@ export const BlockCard: React.FC<BlockCardProps> = ({
                             ),
                           })
                         }
-                        className="paper-input w-14 py-0.5 px-1"
+                        className="paper-input w-12 py-0.5 px-1"
                         title="持续秒数"
                       />
                       <span>秒 X:</span>
@@ -808,7 +869,22 @@ export const BlockCard: React.FC<BlockCardProps> = ({
                             ),
                           })
                         }
-                        className="paper-input w-14 py-0.5 px-1"
+                        className="paper-input w-12 py-0.5 px-1"
+                      />
+                      <span>Y:</span>
+                      <input
+                        type="number"
+                        step={0.05}
+                        value={kf.y}
+                        onChange={(e) =>
+                          onUpdate({
+                            ...block,
+                            keyframes: (block.keyframes ?? []).map((k) =>
+                              k.id === kf.id ? { ...k, y: Number(e.target.value) } : k
+                            ),
+                          })
+                        }
+                        className="paper-input w-12 py-0.5 px-1"
                       />
                       <span>缩放:</span>
                       <input
@@ -823,8 +899,60 @@ export const BlockCard: React.FC<BlockCardProps> = ({
                             ),
                           })
                         }
-                        className="paper-input w-14 py-0.5 px-1"
+                        className="paper-input w-12 py-0.5 px-1"
                       />
+                      <span>旋转:</span>
+                      <input
+                        type="number"
+                        step={5}
+                        value={kf.rotation}
+                        onChange={(e) =>
+                          onUpdate({
+                            ...block,
+                            keyframes: (block.keyframes ?? []).map((k) =>
+                              k.id === kf.id ? { ...k, rotation: Number(e.target.value) } : k
+                            ),
+                          })
+                        }
+                        className="paper-input w-12 py-0.5 px-1"
+                      />
+                      <span>透明:</span>
+                      <input
+                        type="number"
+                        step={0.1}
+                        min={0}
+                        max={1}
+                        value={kf.alpha}
+                        onChange={(e) =>
+                          onUpdate({
+                            ...block,
+                            keyframes: (block.keyframes ?? []).map((k) =>
+                              k.id === kf.id ? { ...k, alpha: Number(e.target.value) } : k
+                            ),
+                          })
+                        }
+                        className="paper-input w-12 py-0.5 px-1"
+                      />
+                      <select
+                        value={kf.easing}
+                        onChange={(e) =>
+                          onUpdate({
+                            ...block,
+                            keyframes: (block.keyframes ?? []).map((k) =>
+                              k.id === kf.id
+                                ? { ...k, easing: e.target.value as SpriteKeyframe['easing'] }
+                                : k
+                            ),
+                          })
+                        }
+                        className="paper-input py-0.5 px-1 text-[11px]"
+                        title="缓动曲线"
+                      >
+                        <option value="ease">平滑</option>
+                        <option value="linear">匀速</option>
+                        <option value="easein">缓入</option>
+                        <option value="easeout">缓出</option>
+                      </select>
                       <button
                         type="button"
                         onClick={() =>
@@ -833,7 +961,7 @@ export const BlockCard: React.FC<BlockCardProps> = ({
                             keyframes: (block.keyframes ?? []).filter((k) => k.id !== kf.id),
                           })
                         }
-                        className="p-0.5 text-[#948D82] hover:text-[#C93B2B] cursor-pointer"
+                        className="p-0.5 text-[#948D82] hover:text-[#C93B2B] cursor-pointer ml-auto"
                       >
                         <Trash2 size={12} />
                       </button>
@@ -877,109 +1005,191 @@ export const BlockCard: React.FC<BlockCardProps> = ({
             {block.layers.map((ly) => (
               <div
                 key={ly.id}
-                className="p-2 rounded bg-[#FBFAF5] border border-[#E7E2D8] grid grid-cols-12 gap-1.5 items-center text-[11.5px]"
+                className="p-2 rounded bg-[#FBFAF5] border border-[#E7E2D8] flex flex-col gap-1.5 text-[11.5px]"
               >
-                <input
-                  type="text"
-                  value={ly.name}
-                  onChange={(e) =>
-                    onUpdate({
-                      ...block,
-                      layers: block.layers.map((x) => (x.id === ly.id ? { ...x, name: e.target.value } : x)),
-                    })
-                  }
-                  className="paper-input col-span-2 py-0.5 px-1.5"
-                />
-                <select
-                  value={ly.group}
-                  onChange={(e) =>
-                    onUpdate({
-                      ...block,
-                      layers: block.layers.map((x) =>
-                        x.id === ly.id ? { ...x, group: e.target.value as StageLayer['group'] } : x
-                      ),
-                    })
-                  }
-                  className="paper-input col-span-2 py-0.5 px-1"
-                >
-                  <option value="background">远景组</option>
-                  <option value="midground">中景组</option>
-                  <option value="foreground">前景组</option>
-                </select>
-                <select
-                  value={ly.assetId}
-                  onChange={(e) =>
-                    onUpdate({
-                      ...block,
-                      layers: block.layers.map((x) => (x.id === ly.id ? { ...x, assetId: e.target.value } : x)),
-                    })
-                  }
-                  className="paper-input col-span-3 py-0.5 px-1"
-                >
-                  <option value="">选择图片</option>
-                  {project.assets
-                    .filter((a) => a.category === 'background' || a.category === 'ui')
-                    .map((a) => (
-                      <option key={a.id} value={a.id}>
-                        {a.name}
-                      </option>
-                    ))}
-                </select>
-                <input
-                  type="number"
-                  value={ly.offsetX}
-                  onChange={(e) =>
-                    onUpdate({
-                      ...block,
-                      layers: block.layers.map((x) =>
-                        x.id === ly.id ? { ...x, offsetX: Number(e.target.value) } : x
-                      ),
-                    })
-                  }
-                  title="初始水平偏移"
-                  className="paper-input col-span-1 py-0.5 px-1 text-center"
-                />
-                <input
-                  type="number"
-                  step={0.1}
-                  value={ly.parallaxDepth}
-                  onChange={(e) =>
-                    onUpdate({
-                      ...block,
-                      layers: block.layers.map((x) =>
-                        x.id === ly.id ? { ...x, parallaxDepth: Number(e.target.value) } : x
-                      ),
-                    })
-                  }
-                  title="视差深度"
-                  className="paper-input col-span-2 py-0.5 px-1 text-center"
-                />
-                <button
-                  type="button"
-                  title="单层隔离预览"
-                  onClick={() =>
-                    onUpdate({
-                      ...block,
-                      isolatedLayerId: block.isolatedLayerId === ly.id ? null : ly.id,
-                    })
-                  }
-                  className={`col-span-1 p-1 rounded border text-center cursor-pointer ${
-                    block.isolatedLayerId === ly.id
-                      ? 'bg-[#FFF1ED] border-[#FF5A3D] text-[#FF5A3D]'
-                      : 'border-[#D7D1C6] text-[#706A60]'
-                  }`}
-                >
-                  {block.isolatedLayerId === ly.id ? <Eye size={12} /> : <EyeOff size={12} />}
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    onUpdate({ ...block, layers: block.layers.filter((x) => x.id !== ly.id) })
-                  }
-                  className="col-span-1 p-1 text-[#948D82] hover:text-[#C93B2B] cursor-pointer"
-                >
-                  <Trash2 size={12} />
-                </button>
+                <div className="grid grid-cols-12 gap-1.5 items-center">
+                  <input
+                    type="text"
+                    value={ly.name}
+                    onChange={(e) =>
+                      onUpdate({
+                        ...block,
+                        layers: block.layers.map((x) => (x.id === ly.id ? { ...x, name: e.target.value } : x)),
+                      })
+                    }
+                    className="paper-input col-span-3 py-0.5 px-1.5"
+                    placeholder="图层名"
+                  />
+                  <select
+                    value={ly.group}
+                    onChange={(e) =>
+                      onUpdate({
+                        ...block,
+                        layers: block.layers.map((x) =>
+                          x.id === ly.id ? { ...x, group: e.target.value as StageLayer['group'] } : x
+                        ),
+                      })
+                    }
+                    className="paper-input col-span-2 py-0.5 px-1"
+                  >
+                    <option value="background">远景组</option>
+                    <option value="midground">中景组</option>
+                    <option value="foreground">前景组</option>
+                  </select>
+                  <select
+                    value={ly.assetId}
+                    onChange={(e) =>
+                      onUpdate({
+                        ...block,
+                        layers: block.layers.map((x) => (x.id === ly.id ? { ...x, assetId: e.target.value } : x)),
+                      })
+                    }
+                    className="paper-input col-span-4 py-0.5 px-1"
+                  >
+                    <option value="">选择图片</option>
+                    {project.assets
+                      .filter((a) => a.category === 'background' || a.category === 'ui')
+                      .map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.name}
+                        </option>
+                      ))}
+                  </select>
+                  <label className="col-span-1 inline-flex items-center justify-center cursor-pointer" title="图层可见性">
+                    <input
+                      type="checkbox"
+                      checked={ly.visible}
+                      onChange={(e) =>
+                        onUpdate({
+                          ...block,
+                          layers: block.layers.map((x) =>
+                            x.id === ly.id ? { ...x, visible: e.target.checked } : x
+                          ),
+                        })
+                      }
+                      className="accent-[#FF5A3D]"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    title="单层隔离预览"
+                    onClick={() =>
+                      onUpdate({
+                        ...block,
+                        isolatedLayerId: block.isolatedLayerId === ly.id ? null : ly.id,
+                      })
+                    }
+                    className={`col-span-1 p-1 rounded border flex items-center justify-center cursor-pointer ${
+                      block.isolatedLayerId === ly.id
+                        ? 'bg-[#FFF1ED] border-[#FF5A3D] text-[#FF5A3D]'
+                        : 'border-[#D7D1C6] text-[#706A60]'
+                    }`}
+                  >
+                    {block.isolatedLayerId === ly.id ? <Eye size={12} /> : <EyeOff size={12} />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      onUpdate({ ...block, layers: block.layers.filter((x) => x.id !== ly.id) })
+                    }
+                    className="col-span-1 p-1 text-[#948D82] hover:text-[#C93B2B] cursor-pointer flex justify-center"
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap text-[11px] text-[#706A60]">
+                  <span>X偏移</span>
+                  <input
+                    type="number"
+                    value={ly.offsetX}
+                    onChange={(e) =>
+                      onUpdate({
+                        ...block,
+                        layers: block.layers.map((x) =>
+                          x.id === ly.id ? { ...x, offsetX: Number(e.target.value) } : x
+                        ),
+                      })
+                    }
+                    className="paper-input w-14 py-0 px-1 text-center text-[11px]"
+                  />
+                  <span>Y偏移</span>
+                  <input
+                    type="number"
+                    value={ly.offsetY}
+                    onChange={(e) =>
+                      onUpdate({
+                        ...block,
+                        layers: block.layers.map((x) =>
+                          x.id === ly.id ? { ...x, offsetY: Number(e.target.value) } : x
+                        ),
+                      })
+                    }
+                    className="paper-input w-14 py-0 px-1 text-center text-[11px]"
+                  />
+                  <span>视差</span>
+                  <input
+                    type="number"
+                    step={0.1}
+                    value={ly.parallaxDepth}
+                    onChange={(e) =>
+                      onUpdate({
+                        ...block,
+                        layers: block.layers.map((x) =>
+                          x.id === ly.id ? { ...x, parallaxDepth: Number(e.target.value) } : x
+                        ),
+                      })
+                    }
+                    className="paper-input w-12 py-0 px-1 text-center text-[11px]"
+                  />
+                  <span>缩放</span>
+                  <input
+                    type="number"
+                    step={0.05}
+                    min={0.2}
+                    max={3}
+                    value={ly.scale}
+                    onChange={(e) =>
+                      onUpdate({
+                        ...block,
+                        layers: block.layers.map((x) =>
+                          x.id === ly.id ? { ...x, scale: Number(e.target.value) } : x
+                        ),
+                      })
+                    }
+                    className="paper-input w-12 py-0 px-1 text-center text-[11px]"
+                  />
+                  <span>透明</span>
+                  <input
+                    type="number"
+                    step={0.1}
+                    min={0}
+                    max={1}
+                    value={ly.alpha}
+                    onChange={(e) =>
+                      onUpdate({
+                        ...block,
+                        layers: block.layers.map((x) =>
+                          x.id === ly.id ? { ...x, alpha: Number(e.target.value) } : x
+                        ),
+                      })
+                    }
+                    className="paper-input w-12 py-0 px-1 text-center text-[11px]"
+                  />
+                  <span>层级</span>
+                  <input
+                    type="number"
+                    value={ly.zIndex}
+                    onChange={(e) =>
+                      onUpdate({
+                        ...block,
+                        layers: block.layers.map((x) =>
+                          x.id === ly.id ? { ...x, zIndex: Number(e.target.value) } : x
+                        ),
+                      })
+                    }
+                    className="paper-input w-12 py-0 px-1 text-center text-[11px]"
+                  />
+                </div>
               </div>
             ))}
           </div>
@@ -1021,6 +1231,18 @@ export const BlockCard: React.FC<BlockCardProps> = ({
                     step={10}
                     value={block.panX}
                     onChange={(e) => onUpdate({ ...block, panX: Number(e.target.value) })}
+                    className="w-full accent-[#FF5A3D]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] text-[#706A60]">垂直平移 ({block.panY})</label>
+                  <input
+                    type="range"
+                    min={-150}
+                    max={150}
+                    step={10}
+                    value={block.panY}
+                    onChange={(e) => onUpdate({ ...block, panY: Number(e.target.value) })}
                     className="w-full accent-[#FF5A3D]"
                   />
                 </div>
@@ -1074,6 +1296,22 @@ export const BlockCard: React.FC<BlockCardProps> = ({
                     <option value="sparkles">萤火光点</option>
                   </select>
                 </div>
+                {block.particles !== 'none' && (
+                  <div>
+                    <label className="block text-[11px] text-[#706A60]">
+                      粒子密度 ({block.particleIntensity.toFixed(1)}x)
+                    </label>
+                    <input
+                      type="range"
+                      min={0.3}
+                      max={2}
+                      step={0.1}
+                      value={block.particleIntensity}
+                      onChange={(e) => onUpdate({ ...block, particleIntensity: Number(e.target.value) })}
+                      className="w-full accent-[#FF5A3D]"
+                    />
+                  </div>
+                )}
                 <div>
                   <label className="block text-[11px] text-[#706A60]">景深模糊 ({block.blur})</label>
                   <input
@@ -1083,6 +1321,18 @@ export const BlockCard: React.FC<BlockCardProps> = ({
                     step={0.5}
                     value={block.blur}
                     onChange={(e) => onUpdate({ ...block, blur: Number(e.target.value) })}
+                    className="w-full accent-[#FF5A3D]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] text-[#706A60]">焦平面 ({Math.round((block.dofFocus ?? 0.5) * 100)}%)</label>
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    value={block.dofFocus ?? 0.5}
+                    onChange={(e) => onUpdate({ ...block, dofFocus: Number(e.target.value) })}
                     className="w-full accent-[#FF5A3D]"
                   />
                 </div>
@@ -1203,7 +1453,7 @@ export const BlockCard: React.FC<BlockCardProps> = ({
                 <label className="inline-flex items-center gap-1.5 text-[12px] self-center cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={block.loop !== false}
+                    checked={block.channel === 'bgm' ? block.loop !== false : Boolean(block.loop)}
                     onChange={(e) => onUpdate({ ...block, loop: e.target.checked })}
                     className="accent-[#FF5A3D]"
                   />
@@ -1247,15 +1497,45 @@ export const BlockCard: React.FC<BlockCardProps> = ({
                   ))}
               </select>
             </div>
-            <label className="inline-flex items-center gap-1.5 self-end pb-1.5 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={block.skippable !== false}
-                onChange={(e) => onUpdate({ ...block, skippable: e.target.checked })}
-                className="accent-[#FF5A3D]"
-              />
-              允许玩家点击跳过
-            </label>
+            {block.mode === 'sprite_video' && (
+              <div>
+                <label className="block text-[11px] text-[#706A60] mb-1">关联角色（可选）</label>
+                <select
+                  value={block.characterId ?? ''}
+                  onChange={(e) => onUpdate({ ...block, characterId: e.target.value || undefined })}
+                  className="paper-input w-full py-1"
+                >
+                  <option value="">独立画面</option>
+                  {project.characters.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <div className="flex items-center gap-3 self-end pb-1.5">
+              <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={block.mode === 'background_loop' ? block.loop !== false : Boolean(block.loop)}
+                  onChange={(e) => onUpdate({ ...block, loop: e.target.checked })}
+                  className="accent-[#FF5A3D]"
+                />
+                循环播放
+              </label>
+              {block.mode === 'fullscreen' && (
+                <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={block.skippable !== false}
+                    onChange={(e) => onUpdate({ ...block, skippable: e.target.checked })}
+                    className="accent-[#FF5A3D]"
+                  />
+                  可点击跳过
+                </label>
+              )}
+            </div>
           </div>
         )}
 
@@ -1351,6 +1631,15 @@ export const BlockCard: React.FC<BlockCardProps> = ({
                       ))}
                     </select>
                   )}
+                  {block.falseTargetType === 'ending' && (
+                    <input
+                      type="text"
+                      value={block.falseEndingTitle ?? ''}
+                      onChange={(e) => onUpdate({ ...block, falseEndingTitle: e.target.value })}
+                      placeholder="否则分支结局标题"
+                      className="paper-input flex-1 py-1"
+                    />
+                  )}
                 </div>
               </div>
             </div>
@@ -1405,7 +1694,7 @@ export const BlockCard: React.FC<BlockCardProps> = ({
             )}
 
             {block.action === 'ending' && (
-              <div className="w-full grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
+              <div className="w-full grid grid-cols-1 sm:grid-cols-3 gap-2 mt-1">
                 <input
                   type="text"
                   value={block.endingTitle ?? ''}
@@ -1420,6 +1709,21 @@ export const BlockCard: React.FC<BlockCardProps> = ({
                   placeholder="结局寄语（可选）"
                   className="paper-input py-1"
                 />
+                <select
+                  value={block.cgAssetId ?? ''}
+                  onChange={(e) => onUpdate({ ...block, cgAssetId: e.target.value || undefined })}
+                  className="paper-input py-1"
+                  title="结局专属 CG 插画（可选，达成后自动解锁）"
+                >
+                  <option value="">无结局专属 CG</option>
+                  {project.assets
+                    .filter((a) => a.category === 'background')
+                    .map((a) => (
+                      <option key={a.id} value={a.id}>
+                        结局 CG：{a.name}
+                      </option>
+                    ))}
+                </select>
               </div>
             )}
           </div>
@@ -1548,13 +1852,22 @@ const ChoiceOptionRow: React.FC<{
         )}
 
         {option.targetType === 'ending' && (
-          <input
-            type="text"
-            value={option.endingTitle ?? ''}
-            onChange={(e) => onChange({ ...option, endingTitle: e.target.value })}
-            placeholder="结局名称"
-            className="paper-input py-1 text-[12px] w-32"
-          />
+          <>
+            <input
+              type="text"
+              value={option.endingTitle ?? ''}
+              onChange={(e) => onChange({ ...option, endingTitle: e.target.value })}
+              placeholder="结局名称"
+              className="paper-input py-1 text-[12px] w-28"
+            />
+            <input
+              type="text"
+              value={option.endingSubtitle ?? ''}
+              onChange={(e) => onChange({ ...option, endingSubtitle: e.target.value })}
+              placeholder="结局寄语（可选）"
+              className="paper-input py-1 text-[12px] w-32"
+            />
+          </>
         )}
 
         <button

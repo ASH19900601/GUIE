@@ -212,13 +212,12 @@ export const LocalizationPage: React.FC = () => {
               <p className="text-[11.5px] text-[#706A60] mb-2">
                 当背景图或标题图带有中文文字时，可为当前语言指定替换图片。
               </p>
-              {project.assets.filter((a) => a.category === 'background').length === 0 ? (
-                <div className="text-[11.5px] text-[#948D82]">暂无背景图片素材</div>
+              {project.assets.filter((a) => a.category === 'background' || a.category === 'ui').length === 0 ? (
+                <div className="text-[11.5px] text-[#948D82]">暂无背景或界面图片素材</div>
               ) : (
                 <div className="flex flex-col gap-2">
                   {project.assets
-                    .filter((a) => a.category === 'background')
-                    .slice(0, 6)
+                    .filter((a) => a.category === 'background' || a.category === 'ui')
                     .map((bg) => (
                       <div key={bg.id} className="text-[11.5px]">
                         <div className="text-[#565149] truncate mb-0.5">{bg.name} →</div>
@@ -236,7 +235,7 @@ export const LocalizationPage: React.FC = () => {
                         >
                           <option value="">不替换（使用原图）</option>
                           {project.assets
-                            .filter((a) => a.category === 'background' && a.id !== bg.id)
+                            .filter((a) => (a.category === 'background' || a.category === 'ui') && a.id !== bg.id)
                             .map((alt) => (
                               <option key={alt.id} value={alt.id}>
                                 替换为：{alt.name}

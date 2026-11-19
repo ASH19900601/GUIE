@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Upload,
   Search,
@@ -56,6 +56,10 @@ export const AssetsPage: React.FC = () => {
   const [category, setCategory] = useState<'all' | AssetCategory>('all');
   const [healthFilter, setHealthFilter] = useState<'all' | 'missing' | 'unused' | 'export_scope'>('all');
   const [search, setSearch] = useState('');
+
+  useEffect(() => {
+    void refreshMissingAssets();
+  }, [refreshMissingAssets]);
 
   if (!project || !projectDir) return null;
 
@@ -149,7 +153,7 @@ export const AssetsPage: React.FC = () => {
       onDrop={(e) => {
         e.preventDefault();
         const paths = Array.from(e.dataTransfer.files)
-          .map((f) => (f as File & { path?: string }).path)
+          .map((f) => window.guie.getPathForFile(f))
           .filter((p): p is string => Boolean(p));
         if (paths.length > 0) void handleImportFiles(paths);
       }}
@@ -294,7 +298,9 @@ export const AssetsPage: React.FC = () => {
                           ) : (
                             <Type size={20} />
                           )}
-                          <span>{a.category.toUpperCase()}</span>
+                          <span>
+                            {CATEGORIES.find((c) => c.id === a.category)?.label ?? '素材'}
+                          </span>
                         </div>
                       )}
                       {a.isCg && (
@@ -365,6 +371,25 @@ export const AssetsPage: React.FC = () => {
                     }
                     className="paper-input w-full py-1"
                   />
+                </div>
+                <div>
+                  <label className="block text-[11.5px] text-[#706A60] mb-1">素材分类</label>
+                  <select
+                    value={selectedAsset.category}
+                    onChange={(e) =>
+                      mutateProject((d) => {
+                        const t = d.assets.find((x) => x.id === selectedAsset.id);
+                        if (t) t.category = e.target.value as AssetCategory;
+                      })
+                    }
+                    className="paper-input w-full py-1 text-[12px]"
+                  >
+                    {CATEGORIES.filter((c) => c.id !== 'all').map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 {selectedAsset.category === 'background' && (
                   <label className="inline-flex items-center gap-2 text-[12px] cursor-pointer">

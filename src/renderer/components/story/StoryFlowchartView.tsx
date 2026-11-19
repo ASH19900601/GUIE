@@ -46,6 +46,7 @@ export const StoryFlowchartView: React.FC<StoryFlowchartViewProps> = ({
     origPos: { x: number; y: number };
     curPos: { x: number; y: number };
   } | null>(null);
+  const didDragNodeRef = useRef(false);
 
   const graph = useMemo(() => buildNarrativeFlowGraph(project), [project]);
 
@@ -184,8 +185,9 @@ export const StoryFlowchartView: React.FC<StoryFlowchartViewProps> = ({
   const handleCanvasMouseUp = () => {
     if (draggingNode) {
       const moved =
-        Math.abs(draggingNode.curPos.x - draggingNode.origPos.x) > 3 ||
-        Math.abs(draggingNode.curPos.y - draggingNode.origPos.y) > 3;
+        Math.abs(draggingNode.curPos.x - draggingNode.origPos.x) > 4 ||
+        Math.abs(draggingNode.curPos.y - draggingNode.origPos.y) > 4;
+      didDragNodeRef.current = moved;
       if (moved) {
         const { nodeId, curPos } = draggingNode;
         mutateProject((draft) => {
@@ -398,6 +400,10 @@ export const StoryFlowchartView: React.FC<StoryFlowchartViewProps> = ({
             const mx = (x1 + x2) / 2;
             const my = (y1 + y2) / 2;
             const isEditableChoice = edge.edgeKind === 'choice' && edge.sceneId && edge.blockId && edge.optionId;
+            const isClickableCond =
+              (edge.edgeKind === 'condition_true' || edge.edgeKind === 'condition_false') &&
+              edge.sceneId &&
+              edge.blockId;
             return (
               <button
                 key={`lbl_${edge.id}`}
@@ -406,13 +412,23 @@ export const StoryFlowchartView: React.FC<StoryFlowchartViewProps> = ({
                 onClick={() => {
                   if (isEditableChoice) {
                     onEditChoiceEdge(edge.sceneId!, edge.blockId!, edge.optionId!);
+                  } else if (isClickableCond) {
+                    onJumpToSegment(edge.sceneId!, edge.blockId!);
                   }
                 }}
                 style={{ left: mx, top: my }}
-                title={isEditableChoice ? '点击直接修改此选项与显示条件' : edge.label}
+                title={
+                  isEditableChoice
+                    ? '点击直接修改此选项与显示条件'
+                    : isClickableCond
+                    ? '点击跳转到该条件分支卡片'
+                    : edge.label
+                }
                 className={`absolute -translate-x-1/2 -translate-y-1/2 px-2 py-0.5 rounded-full text-[11px] max-w-[210px] truncate border shadow-xs ${
                   isEditableChoice
                     ? 'bg-[#FFF1ED] border-[#FBCBC1] text-[#D94B30] hover:bg-[#FF5A3D] hover:text-white cursor-pointer font-medium'
+                    : isClickableCond
+                    ? 'bg-[#EDF7F1] border-[#B6DFC7] text-[#2A7B50] hover:bg-[#2A7B50] hover:text-white cursor-pointer'
                     : 'bg-[#FBFAF5] border-[#D7D1C6] text-[#706A60] cursor-default'
                 }`}
               >
@@ -434,6 +450,7 @@ export const StoryFlowchartView: React.FC<StoryFlowchartViewProps> = ({
                 style={{ left: p.x, top: p.y, width: NODE_W, minHeight: NODE_H }}
                 onMouseDown={(e) => {
                   e.stopPropagation();
+                  didDragNodeRef.current = false;
                   setDraggingNode({
                     nodeId: node.id,
                     startClientX: e.clientX,
@@ -444,9 +461,11 @@ export const StoryFlowchartView: React.FC<StoryFlowchartViewProps> = ({
                 }}
                 onClick={(e) => {
                   e.stopPropagation();
-                  if (!draggingNode || (draggingNode.curPos.x === draggingNode.origPos.x && draggingNode.curPos.y === draggingNode.origPos.y)) {
-                    onJumpToSegment(node.sceneId, node.firstBlockId);
+                  if (didDragNodeRef.current) {
+                    didDragNodeRef.current = false;
+                    return;
                   }
+                  onJumpToSegment(node.sceneId, node.firstBlockId);
                 }}
                 className={`absolute rounded-lg border p-3 select-none cursor-pointer transition-shadow hover:shadow-md ${
                   node.isDisabled
@@ -490,10 +509,28 @@ export const StoryFlowchartView: React.FC<StoryFlowchartViewProps> = ({
           })}
         </div>
 
-        {/* Minimap Navigator (Req 2.4) */}
-        <div className="absolute right-3 bottom-3 w-[164px] h-[106px] rounded-md bg-[#FBFAF5]/95 border border-[#D7D1C6] shadow-sm p-1.5 pointer-events-none">
-          <div className="text-[9.5px] text-[#948D82] mb-0.5">小地图概览</div>
-          <svg viewBox={`0 0 ${bounds.w} ${bounds.h}`} className="w-full h-[82px]">
+        {/* Interactive Minimap Navigator (Req 2.4: click to pan + live viewport frame) */}
+        <div
+          data-flow-interactive="true"
+          onClick={(e) => {
+            const svgEl = e.currentTarget.querySelector('svg');
+            const canvasEl = containerRef.current;
+            if (!svgEl || !canvasEl) return;
+            const rect = svgEl.getBoundingClientRect();
+            const relX = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+            const relY = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
+            const worldX = relX * bounds.w;
+            const worldY = relY * bounds.h;
+            setPan({
+              x: Math.round(canvasEl.clientWidth / 2 - worldX * zoom),
+              y: Math.round(canvasEl.clientHeight / 2 - worldY * zoom),
+            });
+          }}
+          title="点击小地图快速跳转画布位置"
+          className="absolute right-3 bottom-3 w-[168px] h-[108px] rounded-md bg-[#FBFAF5]/95 border border-[#D7D1C6] shadow-sm p-1.5 cursor-pointer"
+        >
+          <div className="text-[9.5px] text-[#948D82] mb-0.5">小地图导航（点击跳转）</div>
+          <svg viewBox={`0 0 ${bounds.w} ${bounds.h}`} className="w-full h-[84px]">
             {graph.edges.map((e) => {
               const a = getPos(e.fromNodeId);
               const b = getPos(e.toNodeId);
@@ -524,6 +561,17 @@ export const StoryFlowchartView: React.FC<StoryFlowchartViewProps> = ({
                 />
               );
             })}
+            {containerRef.current && (
+              <rect
+                x={Math.max(0, -pan.x / zoom)}
+                y={Math.max(0, -pan.y / zoom)}
+                width={containerRef.current.clientWidth / zoom}
+                height={containerRef.current.clientHeight / zoom}
+                fill="rgba(255, 90, 61, 0.1)"
+                stroke="#FF5A3D"
+                strokeWidth={14}
+              />
+            )}
           </svg>
         </div>
       </div>

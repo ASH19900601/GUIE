@@ -38,6 +38,13 @@ export function registerDraftFlusher(fn: () => void): () => void {
 let debounceSaveTimer: ReturnType<typeof setTimeout> | null = null;
 let autoSnapshotInterval: ReturnType<typeof setInterval> | null = null;
 
+export interface UndoEntry {
+  project: ProjectData;
+  restoreSnapshotId?: string;
+  coalesceKey?: string;
+  timestamp: number;
+}
+
 interface AppState {
   // Runtime & Home
   runtimeInfo: RuntimeInfo | null;
@@ -63,8 +70,8 @@ interface AppState {
   saveRevision: number;
   lastSavedAt: string | null;
   unsavedDraftKeys: Record<string, boolean>;
-  undoStack: ProjectData[];
-  redoStack: ProjectData[];
+  undoStack: UndoEntry[];
+  redoStack: UndoEntry[];
 
   // Snapshots Modal
   snapshotsOpen: boolean;
@@ -118,7 +125,12 @@ interface AppState {
   markDraftDirty: (key: string, dirty: boolean) => void;
   mutateProject: (
     updater: (draft: ProjectData) => void,
-    options?: { skipUndo?: boolean; immediateSave?: boolean; milestoneLabel?: string }
+    options?: {
+      skipUndo?: boolean;
+      immediateSave?: boolean;
+      milestoneLabel?: string;
+      coalesceKey?: string;
+    }
   ) => void;
   replaceProjectState: (nextProject: ProjectData, pushUndo?: boolean) => Promise<void>;
   flushPendingSaves: () => Promise<void>;
@@ -410,9 +422,27 @@ export const useAppStore = create<AppState>((set, get) => ({
     updater(next);
 
     const nextRev = state.saveRevision + 1;
-    const undoStack = options?.skipUndo
-      ? state.undoStack
-      : [...state.undoStack.slice(-(MAX_UNDO_DEPTH - 1)), before];
+    const now = Date.now();
+    const lastUndo = state.undoStack[state.undoStack.length - 1];
+    const shouldCoalesce =
+      Boolean(options?.coalesceKey) &&
+      lastUndo?.coalesceKey === options?.coalesceKey &&
+      now - lastUndo.timestamp < 1400;
+
+    let undoStack: UndoEntry[];
+    if (options?.skipUndo) {
+      undoStack = state.undoStack;
+    } else if (shouldCoalesce) {
+      undoStack = [
+        ...state.undoStack.slice(0, -1),
+        { ...lastUndo, timestamp: now },
+      ];
+    } else {
+      undoStack = [
+        ...state.undoStack.slice(-(MAX_UNDO_DEPTH - 1)),
+        { project: before, coalesceKey: options?.coalesceKey, timestamp: now },
+      ];
+    }
 
     if (options?.milestoneLabel && state.projectDir) {
       void window.guie.createSnapshot(state.projectDir, before, options.milestoneLabel, 'milestone');
@@ -439,9 +469,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   replaceProjectState: async (nextProject, pushUndo = true) => {
     const state = get();
     if (!state.projectDir) return;
-    const undoStack =
+    const undoStack: UndoEntry[] =
       pushUndo && state.project
-        ? [...state.undoStack.slice(-(MAX_UNDO_DEPTH - 1)), structuredClone(state.project)]
+        ? [
+            ...state.undoStack.slice(-(MAX_UNDO_DEPTH - 1)),
+            { project: structuredClone(state.project), timestamp: Date.now() },
+          ]
         : state.undoStack;
     const nextRev = state.saveRevision + 1;
     set({
@@ -503,18 +536,41 @@ export const useAppStore = create<AppState>((set, get) => ({
     await get().flushPendingSaves();
     const state = get();
     if (!state.project || !state.projectDir || state.undoStack.length === 0) return;
-    const prev = state.undoStack[state.undoStack.length - 1];
+    const prevEntry = state.undoStack[state.undoStack.length - 1];
     const nextUndo = state.undoStack.slice(0, -1);
-    const nextRedo = [...state.redoStack, structuredClone(state.project)];
+    const nextRedo: UndoEntry[] = [
+      ...state.redoStack,
+      { project: structuredClone(state.project), timestamp: Date.now() },
+    ];
     const nextRev = state.saveRevision + 1;
+
+    if (prevEntry.restoreSnapshotId) {
+      // Also restores custom_*.rpy files touched by AI Assistant!
+      const restored = await window.guie.restoreSnapshot(
+        state.projectDir,
+        prevEntry.restoreSnapshotId,
+        state.project
+      );
+      set({
+        project: restored,
+        undoStack: nextUndo,
+        redoStack: nextRedo,
+        saveRevision: nextRev,
+        saveStatus: 'saved',
+        lastSavedAt: new Date().toISOString(),
+      });
+      get().pushToast('info', '已撤销上一步操作（含扩展脚本变更）');
+      return;
+    }
+
     set({
-      project: prev,
+      project: prevEntry.project,
       undoStack: nextUndo,
       redoStack: nextRedo,
       saveRevision: nextRev,
       saveStatus: 'saving',
     });
-    const res = await window.guie.saveProject(state.projectDir, prev, nextRev);
+    const res = await window.guie.saveProject(state.projectDir, prevEntry.project, nextRev);
     set({ saveStatus: 'saved', lastSavedAt: res.savedAt });
     get().pushToast('info', '已撤销上一步操作');
   },
@@ -523,18 +579,21 @@ export const useAppStore = create<AppState>((set, get) => ({
     await get().flushPendingSaves();
     const state = get();
     if (!state.project || !state.projectDir || state.redoStack.length === 0) return;
-    const nextProj = state.redoStack[state.redoStack.length - 1];
+    const nextEntry = state.redoStack[state.redoStack.length - 1];
     const nextRedo = state.redoStack.slice(0, -1);
-    const nextUndo = [...state.undoStack, structuredClone(state.project)];
+    const nextUndo: UndoEntry[] = [
+      ...state.undoStack,
+      { project: structuredClone(state.project), timestamp: Date.now() },
+    ];
     const nextRev = state.saveRevision + 1;
     set({
-      project: nextProj,
+      project: nextEntry.project,
       undoStack: nextUndo,
       redoStack: nextRedo,
       saveRevision: nextRev,
       saveStatus: 'saving',
     });
-    const res = await window.guie.saveProject(state.projectDir, nextProj, nextRev);
+    const res = await window.guie.saveProject(state.projectDir, nextEntry.project, nextRev);
     set({ saveStatus: 'saved', lastSavedAt: res.savedAt });
     get().pushToast('info', '已重做操作');
   },
@@ -686,7 +745,14 @@ export const useAppStore = create<AppState>((set, get) => ({
         const before = structuredClone(state.project);
         set((s) => ({
           project: res.updatedProject,
-          undoStack: [...s.undoStack.slice(-(MAX_UNDO_DEPTH - 1)), before],
+          undoStack: [
+            ...s.undoStack.slice(-(MAX_UNDO_DEPTH - 1)),
+            {
+              project: before,
+              restoreSnapshotId: res.snapshotIdBefore,
+              timestamp: Date.now(),
+            },
+          ],
           redoStack: [],
           saveStatus: 'saved',
           lastSavedAt: new Date().toISOString(),

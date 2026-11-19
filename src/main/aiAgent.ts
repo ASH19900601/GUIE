@@ -728,16 +728,22 @@ function describeToolAction(
       return { action: 'write', target: String(args.name || '新场景'), summary: '创建新剧情场景' };
     case 'add_choice_branch':
       return { action: 'write', target: sceneName(args.sceneId), summary: '设计多选项剧情分支' };
-    case 'read_custom_rpy':
-      return { action: 'read', target: String(args.fileName || '扩展功能'), summary: '读取自定义功能模块' };
-    case 'write_custom_rpy':
+    case 'read_custom_rpy': {
+      const cleanName = String(args.fileName || '扩展功能').replace(/^custom_/, '').replace(/\.rpy$/i, '');
+      return { action: 'read', target: `自定义扩展 · ${cleanName}`, summary: '读取自定义功能模块' };
+    }
+    case 'write_custom_rpy': {
+      const cleanName = String(args.fileName || '扩展功能').replace(/^custom_/, '').replace(/\.rpy$/i, '');
       return {
         action: 'write',
-        target: String(args.fileName || '扩展功能'),
+        target: `自定义扩展 · ${cleanName}`,
         summary: String(args.summary || '编写高级定制功能'),
       };
-    case 'delete_custom_rpy':
-      return { action: 'delete', target: String(args.fileName || '扩展功能'), summary: '移除自定义功能模块' };
+    }
+    case 'delete_custom_rpy': {
+      const cleanName = String(args.fileName || '扩展功能').replace(/^custom_/, '').replace(/\.rpy$/i, '');
+      return { action: 'delete', target: `自定义扩展 · ${cleanName}`, summary: '移除自定义功能模块' };
+    }
     case 'run_project_check':
       return { action: 'check', target: project.meta.title, summary: '执行运行前完整性检查' };
     default:
@@ -1065,10 +1071,11 @@ async function executeToolCall(
       if (!fs.existsSync(full)) {
         return { ok: false, mutated: false, output: { error: `文件不存在：${fn}` } };
       }
+      const cleanName = fn.replace(/^custom_/, '').replace(/\.rpy$/i, '');
       return {
         ok: true,
         mutated: false,
-        target: fn,
+        target: `自定义扩展 · ${cleanName}`,
         output: { fileName: fn, content: fs.readFileSync(full, 'utf8') },
       };
     }
@@ -1080,12 +1087,13 @@ async function executeToolCall(
       const content = String(args.content || '');
       const full = path.join(projectDir, 'game', fn);
       atomicWriteText(full, content);
+      const cleanName = fn.replace(/^custom_/, '').replace(/\.rpy$/i, '');
       return {
         ok: true,
         mutated: true,
         touchedCustomRpy: true,
-        target: fn,
-        summary: String(args.summary || `已写入自定义功能模块 ${fn}`),
+        target: `自定义扩展 · ${cleanName}`,
+        summary: String(args.summary || `已写入自定义功能模块 ${cleanName}`),
         output: { fileName: fn, bytes: Buffer.byteLength(content, 'utf8') },
       };
     }
@@ -1097,11 +1105,12 @@ async function executeToolCall(
       }
       const full = path.join(projectDir, 'game', fn);
       if (fs.existsSync(full)) fs.rmSync(full, { force: true });
+      const cleanName = fn.replace(/^custom_/, '').replace(/\.rpy$/i, '');
       return {
         ok: true,
         mutated: true,
-        target: fn,
-        summary: `已移除自定义模块 ${fn}`,
+        target: `自定义扩展 · ${cleanName}`,
+        summary: `已移除自定义模块 ${cleanName}`,
         output: { deleted: fn },
       };
     }

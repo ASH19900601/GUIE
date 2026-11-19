@@ -28,6 +28,17 @@ const PRESET_LIST: Array<{ id: AiProviderPreset; label: string; url: string; mod
   { id: 'custom', label: '其他兼容服务', url: 'https://api.deepseek.com/v1', model: 'deepseek-chat' },
 ];
 
+const TAB_LABELS: Record<string, string> = {
+  story: '故事工作台',
+  characters: '角色与状态',
+  assets: '素材库',
+  appearance: '游戏外观',
+  extensions: '扩展市场',
+  reuse: '跨项目复用',
+  localization: '多语言本地化',
+  finish: '完成与发布',
+};
+
 const QUICK_TASKS = [
   { label: '续写 5 句对白', prompt: '请根据当前场景的氛围，续写 5 句自然生动的对白或旁白。' },
   { label: '润色选中台词', prompt: '请把当前选中的对白台词润色得更有画面感与人物性格，并直接更新到卡片中。' },
@@ -235,9 +246,10 @@ export const AiAssistantDrawer: React.FC = () => {
       )}
 
       {/* Context Awareness Pill */}
-      <div className="px-4 py-2 border-b border-[#EFECE3] bg-[#FBFAF5] text-[11.5px] text-[#706A60] flex items-center justify-between">
+      <div className="px-4 py-2 border-b border-[#EFECE3] bg-[#FBFAF5] text-[11.5px] text-[#706A60] flex items-center justify-between gap-2">
         <span className="truncate">
-          当前上下文：{activeScene ? `场景「${activeScene.name}」` : `页面「${activeTab}」`}
+          当前上下文：{TAB_LABELS[activeTab] || '工作台'}
+          {activeScene ? ` · 场景「${activeScene.name}」` : ''}
         </span>
         <span className="text-[11px] text-[#2A7B50] shrink-0">修改支持一键撤销</span>
       </div>
@@ -372,6 +384,20 @@ export const AiAssistantDrawer: React.FC = () => {
 
       {/* Input Composer */}
       <form onSubmit={handleSend} className="p-3 border-t border-[#D7D1C6] bg-white flex flex-col gap-2">
+        {aiMessages.length > 0 && !aiBusy && (
+          <div className="flex items-center gap-1 overflow-x-auto sidebar-scroll pb-0.5">
+            {QUICK_TASKS.map((qt) => (
+              <button
+                key={qt.label}
+                type="button"
+                onClick={() => void sendAiMessage(qt.prompt)}
+                className="px-2 py-0.5 rounded bg-[#FBFAF5] border border-[#E7E2D8] hover:border-[#FF5A3D] text-[11px] text-[#565149] hover:text-[#171513] shrink-0 cursor-pointer"
+              >
+                {qt.label}
+              </button>
+            ))}
+          </div>
+        )}
         <textarea
           data-testid="ai-prompt-input"
           rows={3}

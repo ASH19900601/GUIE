@@ -58,6 +58,9 @@ export const AsrWorkbenchModal: React.FC = () => {
   if (!asrModalOpen || !project || !projectDir) return null;
 
   const currentScene = project.scenes.find((s) => s.id === activeSceneId) ?? project.scenes[0];
+  const existingDialogues = currentScene
+    ? currentScene.blocks.filter((b): b is DialogueBlock => b.type === 'dialogue')
+    : [];
 
   const transcribeRow = async (rowId: string, file: File) => {
     setRows((prev) =>
@@ -368,6 +371,11 @@ export const AsrWorkbenchModal: React.FC = () => {
                   placeholder="识别结果可在此直接校对修改…"
                   className="paper-input w-full text-[13px]"
                 />
+                {existingDialogues[idx] && (
+                  <div className="text-[11px] text-[#706A60] bg-[#FBFAF5] px-2.5 py-1 rounded border border-[#EFECE3] truncate">
+                    顺序匹配预览 → 对白 #{idx + 1}：「{existingDialogues[idx].text || '（空对白）'}」
+                  </div>
+                )}
               </div>
             ))
           )}

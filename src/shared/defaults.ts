@@ -646,6 +646,17 @@ export function replaceAssetReferences(
   if (next.appearance.dialogueBox.backgroundAssetId === oldAssetId) next.appearance.dialogueBox.backgroundAssetId = newAssetId;
   if (next.appearance.window.iconAssetId === oldAssetId) next.appearance.window.iconAssetId = newAssetId;
 
+  for (const lang of next.localization.languages) {
+    if (lang.fontAssetId === oldAssetId) lang.fontAssetId = newAssetId;
+    const updatedOverrides: Record<string, string> = {};
+    for (const [k, v] of Object.entries(lang.imageOverrides)) {
+      const nextKey = k === oldAssetId ? newAssetId : k;
+      const nextVal = v === oldAssetId ? newAssetId : v;
+      updatedOverrides[nextKey] = nextVal;
+    }
+    lang.imageOverrides = updatedOverrides;
+  }
+
   for (const scene of next.scenes) {
     for (const blk of scene.blocks) {
       if (blk.type === 'dialogue' && blk.voiceAssetId === oldAssetId) blk.voiceAssetId = newAssetId;

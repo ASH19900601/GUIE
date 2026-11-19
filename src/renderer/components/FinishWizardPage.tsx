@@ -41,6 +41,7 @@ export const FinishWizardPage: React.FC = () => {
   const [engineCheckedOk, setEngineCheckedOk] = useState<boolean | null>(null);
   const [playtestSceneId, setPlaytestSceneId] = useState<string>('');
   const [targets, setTargets] = useState<ExportTargetStatus[]>([]);
+  const [exportDir, setExportDir] = useState<string>('');
   const [exportingTarget, setExportingTarget] = useState<string | null>(null);
   const [exportResult, setExportResult] = useState<ExportResult | null>(null);
 
@@ -71,10 +72,13 @@ export const FinishWizardPage: React.FC = () => {
     try {
       await flushPendingSaves();
       await refreshMissingAssets();
-      const res = await window.guie.runEngineCheck(projectDir, project);
+      const freshState = useAppStore.getState();
+      const freshProj = freshState.project ?? project;
+      const freshIssues = analyzeProjectIssues(freshProj, new Set(freshState.missingAssetIds));
+      const res = await window.guie.runEngineCheck(projectDir, freshProj);
       setEngineIssues(res.friendlyIssues);
       setEngineCheckedOk(res.ok);
-      if (res.ok && structuralIssues.filter((i) => i.severity === 'error').length === 0) {
+      if (res.ok && freshIssues.filter((i) => i.severity === 'error').length === 0) {
         pushToast('success', '检查全部通过，未发现阻止试玩或导出的问题！');
       } else {
         pushToast('warning', '检查发现待修复问题，请点击右侧真实修复按钮直接解决。');
@@ -121,13 +125,34 @@ export const FinishWizardPage: React.FC = () => {
     if (act.type === 'connect_orphan_scene') {
       const orphan = project.scenes.find((s) => s.id === act.sceneId);
       if (!orphan) return;
-      // Connect orphan scene to the end of the last reachable scene (or start scene)
+      // Connect orphan scene to a genuinely reachable non-ending anchor scene (or append to choice if needed)
       mutateProject(
         (d) => {
+          const active = d.scenes.filter((s) => !s.disabled);
+          const endsWithEnding = (s: typeof orphan) =>
+            s.blocks.some((b) => b.type === 'flow' && b.action === 'ending');
           const anchor =
-            d.scenes.find((s) => s.id !== orphan.id && !s.nextSceneId) ??
-            d.scenes.find((s) => s.id === d.meta.startSceneId);
-          if (anchor) anchor.nextSceneId = orphan.id;
+            active.find((s) => s.id !== orphan.id && !s.nextSceneId && !endsWithEnding(s)) ??
+            active.find((s) => s.id === d.meta.startSceneId && s.id !== orphan.id) ??
+            active.find((s) => s.id !== orphan.id);
+          if (!anchor) return;
+          if (!anchor.nextSceneId && !endsWithEnding(anchor)) {
+            anchor.nextSceneId = orphan.id;
+          } else {
+            const existingChoice = [...anchor.blocks].reverse().find((b) => b.type === 'choice');
+            if (existingChoice && existingChoice.type === 'choice') {
+              existingChoice.options.push({
+                id: createId('opt'),
+                label: `前往「${orphan.name}」`,
+                lockedBehavior: 'hide',
+                effects: [],
+                targetType: 'scene',
+                targetSceneId: orphan.id,
+              });
+            } else {
+              anchor.nextSceneId = orphan.id;
+            }
+          }
         },
         { immediateSave: true }
       );
@@ -200,9 +225,11 @@ export const FinishWizardPage: React.FC = () => {
     pushToast('success', '已为悬空选项成功连接后续场景');
   };
 
+  const effectiveExportDir = exportDir || `${projectDir.replace(/[\\/]+$/, '')}_exports`;
+
   const handleExport = async (target: ExportTargetStatus['target']) => {
     await flushPendingSaves();
-    const outDir = `${projectDir.replace(/[\\/]+$/, '')}_exports`;
+    const outDir = effectiveExportDir;
     setExportingTarget(target);
     setExportResult(null);
     try {
@@ -452,6 +479,37 @@ export const FinishWizardPage: React.FC = () => {
         {/* STEP 3: Multi-Platform Export */}
         {step === 3 && (
           <div className="flex flex-col gap-4">
+            <div className="paper-card p-4 flex items-center justify-between gap-3 flex-wrap text-[12.5px]">
+              <div className="min-w-0 flex-1">
+                <div className="font-medium text-[#171513]">导出输出目录</div>
+                <div className="text-[11.5px] text-[#706A60] truncate mt-0.5" title={effectiveExportDir}>
+                  {effectiveExportDir}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={async () => {
+                  const picked = await window.guie.pickDirectory('选择导出发行包的保存目录');
+                  if (picked) setExportDir(picked);
+                }}
+                className="paper-btn-secondary px-3 py-1.5 text-[12px] inline-flex items-center gap-1.5 shrink-0"
+              >
+                <FolderOpen size={13} /> 更改导出位置
+              </button>
+            </div>
+
+            {exportingTarget && (
+              <div className="paper-card p-4 bg-[#FFF1ED] border-[#FBCBC1] flex items-center gap-3 text-[12.5px]">
+                <Loader2 size={16} className="animate-spin text-[#FF5A3D] shrink-0" />
+                <div>
+                  <div className="font-semibold text-[#171513]">正在执行独立游戏打包构建…</div>
+                  <div className="text-[11.5px] text-[#706A60]">
+                    正在整理剧情、图片、音频、内置多语言字体与可执行运行包，请稍候（通常需要 15–40 秒）。
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
               {targets.map((t) => {
                 const isBuilding = exportingTarget === t.target;

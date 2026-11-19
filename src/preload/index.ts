@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import type { GuieBridgeApi } from '../shared/ipc';
 
 const api: GuieBridgeApi = {
@@ -6,6 +6,13 @@ const api: GuieBridgeApi = {
   pickDirectory: (title) => ipcRenderer.invoke('guie:pickDirectory', title),
   pickFiles: (options) => ipcRenderer.invoke('guie:pickFiles', options),
   openPathInExplorer: (targetPath) => ipcRenderer.invoke('guie:openPathInExplorer', targetPath),
+  getPathForFile: (file) => {
+    try {
+      return webUtils.getPathForFile(file);
+    } catch {
+      return (file as File & { path?: string }).path || '';
+    }
+  },
 
   listRecentProjects: () => ipcRenderer.invoke('guie:listRecentProjects'),
   removeRecentProject: (projectDir) => ipcRenderer.invoke('guie:removeRecentProject', projectDir),
@@ -25,6 +32,8 @@ const api: GuieBridgeApi = {
   },
 
   listSnapshots: (projectDir) => ipcRenderer.invoke('guie:listSnapshots', projectDir),
+  previewSnapshot: (projectDir, snapshotId) =>
+    ipcRenderer.invoke('guie:previewSnapshot', projectDir, snapshotId),
   createSnapshot: (projectDir, project, label, kind) =>
     ipcRenderer.invoke('guie:createSnapshot', projectDir, project, label, kind),
   restoreSnapshot: (projectDir, snapshotId, currentProject) =>

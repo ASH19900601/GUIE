@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Library, Users, Folder, FileText, Scissors, Download, Trash2, Plus } from 'lucide-react';
 import type { ReuseItemKind, ReuseLibraryItem } from '@shared/types';
+import { summarizeBlockForTimeline } from '@shared/previewEngine';
 import { useAppStore } from '../store/useAppStore';
 
 const KIND_TABS: Array<{
@@ -19,6 +20,7 @@ export const ReuseLibraryPage: React.FC = () => {
   const [kind, setKind] = useState<ReuseItemKind>('character');
   const [items, setItems] = useState<ReuseLibraryItem[]>([]);
   const [sourceId, setSourceId] = useState('');
+  const [selectedSnippetBlockIds, setSelectedSnippetBlockIds] = useState<string[]>([]);
   const [saveName, setSaveName] = useState('');
 
   const reload = async () => {
@@ -54,8 +56,13 @@ export const ReuseLibraryPage: React.FC = () => {
       name: saveName.trim() || chosen?.name || '未命名模板',
       project,
       sourceId: effectiveSourceId,
+      blockIds:
+        kind === 'snippet' && selectedSnippetBlockIds.length > 0
+          ? selectedSnippetBlockIds
+          : undefined,
     });
     setSaveName('');
+    setSelectedSnippetBlockIds([]);
     await reload();
     pushToast('success', '已保存到本地跨项目复用库，可在任何其他项目中一键导入');
   };
@@ -119,38 +126,97 @@ export const ReuseLibraryPage: React.FC = () => {
         </div>
 
         {/* Save From Current Project Bar */}
-        <div className="paper-card p-4 flex items-center gap-3 flex-wrap">
-          <span className="text-[12.5px] font-medium shrink-0">从当前项目保存：</span>
-          <select
-            value={effectiveSourceId}
-            onChange={(e) => setSourceId(e.target.value)}
-            className="paper-input py-1.5 min-w-[180px]"
-          >
-            {sourceOptions.length === 0 ? (
-              <option value="">当前项目暂无可保存项</option>
-            ) : (
-              sourceOptions.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.name}
-                </option>
-              ))
-            )}
-          </select>
-          <input
-            type="text"
-            value={saveName}
-            onChange={(e) => setSaveName(e.target.value)}
-            placeholder="自定义模板名称（留空则沿用原名）"
-            className="paper-input flex-1 min-w-[180px] py-1.5"
-          />
-          <button
-            data-testid="save-to-reuse-btn"
-            onClick={() => void handleSave()}
-            disabled={!effectiveSourceId}
-            className="paper-btn-primary px-4 py-1.5 text-[12.5px] inline-flex items-center gap-1.5"
-          >
-            <Plus size={14} /> 存入复用库
-          </button>
+        <div className="paper-card p-4 flex flex-col gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
+            <span className="text-[12.5px] font-medium shrink-0">从当前项目保存：</span>
+            <select
+              value={effectiveSourceId}
+              onChange={(e) => {
+                setSourceId(e.target.value);
+                setSelectedSnippetBlockIds([]);
+              }}
+              className="paper-input py-1.5 min-w-[180px]"
+            >
+              {sourceOptions.length === 0 ? (
+                <option value="">当前项目暂无可保存项</option>
+              ) : (
+                sourceOptions.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.name}
+                  </option>
+                ))
+              )}
+            </select>
+            <input
+              type="text"
+              value={saveName}
+              onChange={(e) => setSaveName(e.target.value)}
+              placeholder="自定义模板名称（留空则沿用原名）"
+              className="paper-input flex-1 min-w-[180px] py-1.5"
+            />
+            <button
+              data-testid="save-to-reuse-btn"
+              onClick={() => void handleSave()}
+              disabled={!effectiveSourceId}
+              className="paper-btn-primary px-4 py-1.5 text-[12.5px] inline-flex items-center gap-1.5"
+            >
+              <Plus size={14} /> 存入复用库
+            </button>
+          </div>
+
+          {kind === 'snippet' && effectiveSourceId && (() => {
+            const sc = project.scenes.find((s) => s.id === effectiveSourceId);
+            if (!sc || sc.blocks.length === 0) return null;
+            return (
+              <div className="border-t border-[#EFECE3] pt-2.5">
+                <div className="text-[11.5px] text-[#706A60] mb-1.5 flex items-center justify-between">
+                  <span>
+                    勾选要打包为复用片段的剧情卡片（不勾选则默认保存前 10 项，已选{' '}
+                    {selectedSnippetBlockIds.length} 项）
+                  </span>
+                  {selectedSnippetBlockIds.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedSnippetBlockIds([])}
+                      className="text-[#FF5A3D] hover:underline cursor-pointer"
+                    >
+                      清空勾选
+                    </button>
+                  )}
+                </div>
+                <div className="max-h-[150px] overflow-y-auto paper-scroll grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                  {sc.blocks.map((blk, bi) => {
+                    const checked = selectedSnippetBlockIds.includes(blk.id);
+                    return (
+                      <label
+                        key={blk.id}
+                        className={`px-2.5 py-1.5 rounded border text-[12px] flex items-center gap-2 cursor-pointer ${
+                          checked
+                            ? 'bg-[#FFF1ED] border-[#FF5A3D]'
+                            : 'bg-[#FBFAF5] border-[#E7E2D8]'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedSnippetBlockIds((prev) => [...prev, blk.id]);
+                            } else {
+                              setSelectedSnippetBlockIds((prev) => prev.filter((id) => id !== blk.id));
+                            }
+                          }}
+                          className="accent-[#FF5A3D]"
+                        />
+                        <span className="text-[11px] text-[#948D82]">#{bi + 1}</span>
+                        <span className="truncate">{summarizeBlockForTimeline(blk, project)}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
         </div>
 
         {/* Saved Items Grid */}

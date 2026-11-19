@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Palette,
   Type,
@@ -10,6 +10,7 @@ import {
   ChevronUp,
   Save,
   Check,
+  Trash2,
 } from 'lucide-react';
 import type { DialogueBoxPreset, ThemePresetId } from '@shared/types';
 import { APPEARANCE_PRESETS, createDefaultAppearance, createId } from '@shared/defaults';
@@ -107,6 +108,36 @@ export const AppearancePage: React.FC = () => {
 
   const sampleBg = getAssetUrl(project.assets.find((a) => a.category === 'background')?.id);
   const boxBgImg = getAssetUrl(ap.dialogueBox.backgroundAssetId);
+  const customDlgFontUrl = getAssetUrl(ap.dialogueBox.fontAssetId ?? ap.font.globalFontAssetId);
+
+  // Dynamically load chosen custom font into preview via FontFace API so preview reflects it live!
+  const [previewFontFamily, setPreviewFontFamily] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    if (!customDlgFontUrl) {
+      setPreviewFontFamily(undefined);
+      return;
+    }
+    const family = `GuiePreviewFont_${Date.now().toString(36)}`;
+    let cancelled = false;
+    try {
+      const face = new FontFace(family, `url("${customDlgFontUrl}")`);
+      void face
+        .load()
+        .then((loaded) => {
+          if (cancelled) return;
+          document.fonts.add(loaded);
+          setPreviewFontFamily(family);
+        })
+        .catch(() => {
+          if (!cancelled) setPreviewFontFamily(undefined);
+        });
+    } catch {
+      setPreviewFontFamily(undefined);
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [customDlgFontUrl]);
 
   return (
     <div className="h-full w-full flex overflow-hidden bg-[#F3F0E8]">
@@ -284,21 +315,36 @@ export const AppearancePage: React.FC = () => {
                   <label className="block font-medium mb-1.5">快速套用对话框预设</label>
                   <div className="flex flex-wrap gap-2">
                     {ap.dialogueBox.savedPresets.map((pre) => (
-                      <button
-                        key={pre.id}
-                        onClick={() =>
-                          mutateProject((d) => {
-                            d.appearance.dialogueBox = {
-                              ...d.appearance.dialogueBox,
-                              ...pre,
-                              savedPresets: d.appearance.dialogueBox.savedPresets,
-                            };
-                          })
-                        }
-                        className="paper-btn-secondary px-3 py-1 text-[12px]"
-                      >
-                        {pre.name}
-                      </button>
+                      <div key={pre.id} className="inline-flex items-center rounded-md border border-[#D7D1C6] bg-white overflow-hidden">
+                        <button
+                          onClick={() =>
+                            mutateProject((d) => {
+                              d.appearance.dialogueBox = {
+                                ...d.appearance.dialogueBox,
+                                ...pre,
+                                savedPresets: d.appearance.dialogueBox.savedPresets,
+                              };
+                            })
+                          }
+                          className="px-3 py-1 text-[12px] hover:bg-[#EFECE3] cursor-pointer"
+                        >
+                          {pre.name}
+                        </button>
+                        {!['preset_standard', 'preset_cinematic'].includes(pre.id) && (
+                          <button
+                            title="删除此预设"
+                            onClick={() =>
+                              mutateProject((d) => {
+                                d.appearance.dialogueBox.savedPresets =
+                                  d.appearance.dialogueBox.savedPresets.filter((x) => x.id !== pre.id);
+                              })
+                            }
+                            className="px-1.5 py-1 text-[#948D82] hover:text-[#C93B2B] hover:bg-[#FCEEEC] border-l border-[#E7E2D8] cursor-pointer"
+                          >
+                            <Trash2 size={11} />
+                          </button>
+                        )}
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -397,26 +443,49 @@ export const AppearancePage: React.FC = () => {
                   </div>
                 </div>
 
-                <div>
-                  <label className="block font-medium mb-1">自定义对话框背景图（可选）</label>
-                  <select
-                    value={ap.dialogueBox.backgroundAssetId ?? ''}
-                    onChange={(e) =>
-                      mutateProject((d) => {
-                        d.appearance.dialogueBox.backgroundAssetId = e.target.value || null;
-                      })
-                    }
-                    className="paper-input w-full"
-                  >
-                    <option value="">使用半透明纯色底框</option>
-                    {project.assets
-                      .filter((a) => a.category === 'ui' || a.category === 'background')
-                      .map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.name}
-                        </option>
-                      ))}
-                  </select>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block font-medium mb-1">对话框专属字体（可选）</label>
+                    <select
+                      value={ap.dialogueBox.fontAssetId ?? ''}
+                      onChange={(e) =>
+                        mutateProject((d) => {
+                          d.appearance.dialogueBox.fontAssetId = e.target.value || null;
+                        })
+                      }
+                      className="paper-input w-full"
+                    >
+                      <option value="">跟随全局字体</option>
+                      {project.assets
+                        .filter((a) => a.category === 'font')
+                        .map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.name}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block font-medium mb-1">自定义对话框背景图（可选）</label>
+                    <select
+                      value={ap.dialogueBox.backgroundAssetId ?? ''}
+                      onChange={(e) =>
+                        mutateProject((d) => {
+                          d.appearance.dialogueBox.backgroundAssetId = e.target.value || null;
+                        })
+                      }
+                      className="paper-input w-full"
+                    >
+                      <option value="">使用半透明纯色底框</option>
+                      {project.assets
+                        .filter((a) => a.category === 'ui' || a.category === 'background')
+                        .map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.name}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
                 </div>
 
                 {/* Collapsible Fine Tuning (Req 6.2.6) */}
@@ -508,7 +577,48 @@ export const AppearancePage: React.FC = () => {
                           className="w-full accent-[#FF5A3D]"
                         />
                       </div>
-                      <label className="inline-flex items-center gap-2 text-[12px] self-end pb-1 cursor-pointer">
+                      <div>
+                        <label className="block text-[11.5px] text-[#706A60]">垂直内边距 ({ap.dialogueBox.paddingY}px)</label>
+                        <input
+                          type="range"
+                          min={10}
+                          max={64}
+                          value={ap.dialogueBox.paddingY}
+                          onChange={(e) =>
+                            mutateProject((d) => {
+                              d.appearance.dialogueBox.paddingY = Number(e.target.value);
+                            })
+                          }
+                          className="w-full accent-[#FF5A3D]"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11.5px] text-[#706A60] mb-1">角色名默认颜色</label>
+                        <input
+                          type="color"
+                          value={ap.dialogueBox.nameColor}
+                          onChange={(e) =>
+                            mutateProject((d) => {
+                              d.appearance.dialogueBox.nameColor = e.target.value;
+                            })
+                          }
+                          className="h-8 w-full rounded border border-[#D7D1C6] cursor-pointer"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11.5px] text-[#706A60] mb-1">阴影颜色</label>
+                        <input
+                          type="color"
+                          value={ap.dialogueBox.shadowColor}
+                          onChange={(e) =>
+                            mutateProject((d) => {
+                              d.appearance.dialogueBox.shadowColor = e.target.value;
+                            })
+                          }
+                          className="h-8 w-full rounded border border-[#D7D1C6] cursor-pointer"
+                        />
+                      </div>
+                      <label className="inline-flex items-center gap-2 text-[12px] col-span-2 cursor-pointer">
                         <input
                           type="checkbox"
                           checked={ap.dialogueBox.textShadow}
@@ -607,6 +717,47 @@ export const AppearancePage: React.FC = () => {
                   className="h-9 w-full rounded border border-[#D7D1C6] cursor-pointer"
                 />
               </div>
+              <div>
+                <label className="block font-medium mb-1">按钮文字色</label>
+                <input
+                  type="color"
+                  value={ap.buttons.textColor}
+                  onChange={(e) =>
+                    mutateProject((d) => {
+                      d.appearance.buttons.textColor = e.target.value;
+                    })
+                  }
+                  className="h-9 w-full rounded border border-[#D7D1C6] cursor-pointer"
+                />
+              </div>
+              <div>
+                <label className="block font-medium mb-1">边框颜色与粗细 ({ap.buttons.borderWidth}px)</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={ap.buttons.borderColor}
+                    onChange={(e) =>
+                      mutateProject((d) => {
+                        d.appearance.buttons.borderColor = e.target.value;
+                      })
+                    }
+                    className="h-9 w-16 rounded border border-[#D7D1C6] cursor-pointer"
+                  />
+                  <input
+                    type="range"
+                    min={0}
+                    max={4}
+                    step={1}
+                    value={ap.buttons.borderWidth}
+                    onChange={(e) =>
+                      mutateProject((d) => {
+                        d.appearance.buttons.borderWidth = Number(e.target.value);
+                      })
+                    }
+                    className="flex-1 accent-[#FF5A3D]"
+                  />
+                </div>
+              </div>
             </div>
           )}
 
@@ -666,19 +817,34 @@ export const AppearancePage: React.FC = () => {
                   </select>
                 </div>
               </div>
-              <label className="inline-flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={ap.window.fullscreenDefault}
-                  onChange={(e) =>
-                    mutateProject((d) => {
-                      d.appearance.window.fullscreenDefault = e.target.checked;
-                    })
-                  }
-                  className="accent-[#FF5A3D]"
-                />
-                启动游戏时默认全屏显示
-              </label>
+              <div className="flex flex-col gap-2">
+                <label className="inline-flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={ap.window.fullscreenDefault}
+                    onChange={(e) =>
+                      mutateProject((d) => {
+                        d.appearance.window.fullscreenDefault = e.target.checked;
+                      })
+                    }
+                    className="accent-[#FF5A3D]"
+                  />
+                  启动游戏时默认全屏显示
+                </label>
+                <label className="inline-flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={ap.window.showWindowTitle}
+                    onChange={(e) =>
+                      mutateProject((d) => {
+                        d.appearance.window.showWindowTitle = e.target.checked;
+                      })
+                    }
+                    className="accent-[#FF5A3D]"
+                  />
+                  在游戏主菜单标题界面显示游戏名称
+                </label>
+              </div>
             </div>
           )}
         </div>
@@ -756,6 +922,7 @@ export const AppearancePage: React.FC = () => {
               data-testid="appearance-preview-dialogue-text"
               style={{
                 color: ap.dialogueBox.textColor,
+                fontFamily: previewFontFamily,
                 fontSize: `${Math.max(10.5, Math.round(ap.dialogueBox.fontSize * 0.36))}px`,
                 fontWeight: ap.dialogueBox.fontWeight,
                 lineHeight: ap.dialogueBox.lineHeight,

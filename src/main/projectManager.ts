@@ -13,6 +13,7 @@ import type {
   ProjectData,
   ProjectSnapshotMeta,
   RecentProjectItem,
+  SnapshotPreviewData,
 } from '../shared/types';
 import { createDefaultAppearance, createId, createNewProjectData, inferAssetCategory } from '../shared/defaults';
 import { compileProjectToRenpy, getBundledFontRelativePath } from './renpyCompiler';
@@ -446,6 +447,40 @@ export function listSnapshots(projectDir: string): ProjectSnapshotMeta[] {
     } catch {}
   }
   return items.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+export function previewSnapshot(
+  projectDir: string,
+  snapshotId: string
+): SnapshotPreviewData {
+  const file = path.join(projectDir, SNAPSHOTS_SUBDIR, `${snapshotId}.json`);
+  if (!fs.existsSync(file)) {
+    throw new Error('找不到指定的历史版本快照。');
+  }
+  const parsed = JSON.parse(fs.readFileSync(file, 'utf8')) as SnapshotFilePayload;
+  const proj = parsed.project;
+  return {
+    meta: parsed.meta,
+    title: proj.meta.title,
+    chapters: proj.chapters.map((c) => ({ id: c.id, name: c.name, disabled: c.disabled })),
+    scenes: proj.scenes.map((s) => {
+      const firstDlg = s.blocks.find((b) => b.type === 'dialogue' && b.text.trim());
+      return {
+        id: s.id,
+        name: s.name,
+        blockCount: s.blocks.length,
+        sampleLine: firstDlg && firstDlg.type === 'dialogue' ? firstDlg.text.slice(0, 60) : undefined,
+      };
+    }),
+    characters: proj.characters.map((c) => ({
+      id: c.id,
+      name: c.name,
+      expressionCount: c.expressions.length,
+    })),
+    variableCount: proj.variables.length,
+    assetCount: proj.assets.length,
+    customFileCount: Object.keys(parsed.customFiles || {}).length,
+  };
 }
 
 export function restoreSnapshot(

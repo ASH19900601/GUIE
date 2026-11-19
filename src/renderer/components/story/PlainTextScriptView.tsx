@@ -1,9 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, Info } from 'lucide-react';
 import type { DialogueBlock, ProjectData, Scene, StoryBlock } from '@shared/types';
 import { createId } from '@shared/defaults';
 import { summarizeBlockForTimeline } from '@shared/previewEngine';
-import { useAppStore } from '../../store/useAppStore';
+import { registerDraftFlusher, useAppStore } from '../../store/useAppStore';
 
 interface PlainTextScriptViewProps {
   scene: Scene;
@@ -24,7 +24,7 @@ export const PlainTextScriptView: React.FC<PlainTextScriptViewProps> = ({
   project,
   onApplyBlocks,
 }) => {
-  const { pushToast } = useAppStore();
+  const { pushToast, markDraftDirty } = useAppStore();
 
   const serializeToScript = useMemo(() => {
     const lines: string[] = [];
@@ -45,19 +45,30 @@ export const PlainTextScriptView: React.FC<PlainTextScriptViewProps> = ({
 
   const [draft, setDraft] = useState(serializeToScript);
   const [hasLocalEdits, setHasLocalEdits] = useState(false);
+  const draftRef = useRef(draft);
+  const dirtyRef = useRef(hasLocalEdits);
+  const sceneRef = useRef(scene);
+  const projectRef = useRef(project);
+  const onApplyRef = useRef(onApplyBlocks);
+  draftRef.current = draft;
+  dirtyRef.current = hasLocalEdits;
+  sceneRef.current = scene;
+  projectRef.current = project;
+  onApplyRef.current = onApplyBlocks;
 
   useEffect(() => {
     setDraft(serializeToScript);
     setHasLocalEdits(false);
-  }, [serializeToScript, scene.id]);
+    markDraftDirty('plain_script', false);
+  }, [serializeToScript, scene.id, markDraftDirty]);
 
-  const handleApply = () => {
-    const existingById = new Map(scene.blocks.map((b) => [b.id, b]));
-    const charByName = new Map(project.characters.map((c) => [c.name, c.id]));
-    const existingDialogues = scene.blocks.filter((b): b is DialogueBlock => b.type === 'dialogue');
+  const parseDraftToBlocks = (rawDraft: string, curScene: Scene, curProject: ProjectData): StoryBlock[] => {
+    const existingById = new Map(curScene.blocks.map((b) => [b.id, b]));
+    const charByName = new Map(curProject.characters.map((c) => [c.name, c.id]));
+    const existingDialogues = curScene.blocks.filter((b): b is DialogueBlock => b.type === 'dialogue');
     let dlgReuseCursor = 0;
 
-    const rawLines = draft.split(/\r?\n/);
+    const rawLines = rawDraft.split(/\r?\n/);
     const nextBlocks: StoryBlock[] = [];
     const placedEventIds = new Set<string>();
 
@@ -103,14 +114,36 @@ export const PlainTextScriptView: React.FC<PlainTextScriptViewProps> = ({
     }
 
     // Safety net: NEVER silently lose any non-dialogue structured event even if user accidentally deleted its marker line!
-    for (const blk of scene.blocks) {
+    for (const blk of curScene.blocks) {
       if (blk.type !== 'dialogue' && !placedEventIds.has(blk.id)) {
         nextBlocks.push(blk);
       }
     }
+    return nextBlocks;
+  };
 
-    onApplyBlocks(nextBlocks);
+  // Register draft flusher so switching scenes/tabs/playtest/home NEVER drops un-synced plain-text edits (Req 5.1)!
+  useEffect(() => {
+    const unregister = registerDraftFlusher(() => {
+      if (dirtyRef.current) {
+        dirtyRef.current = false;
+        markDraftDirty('plain_script', false);
+        const blocks = parseDraftToBlocks(draftRef.current, sceneRef.current, projectRef.current);
+        onApplyRef.current(blocks);
+      }
+    });
+    return () => {
+      unregister();
+      markDraftDirty('plain_script', false);
+    };
+  }, [markDraftDirty]);
+
+  const handleApply = () => {
+    const nextBlocks = parseDraftToBlocks(draft, scene, project);
+    dirtyRef.current = false;
     setHasLocalEdits(false);
+    markDraftDirty('plain_script', false);
+    onApplyBlocks(nextBlocks);
     pushToast('success', '纯文本剧本已同步到卡片视图，所有背景/立绘/分支事件均完整保留。');
   };
 
@@ -142,6 +175,7 @@ export const PlainTextScriptView: React.FC<PlainTextScriptViewProps> = ({
         onChange={(e) => {
           setDraft(e.target.value);
           setHasLocalEdits(true);
+          markDraftDirty('plain_script', true);
         }}
         placeholder={`示例：\n黄昏的教室里只剩下微风声。\n林夏：放学后一起去天台看看吧？`}
         className="flex-1 w-full paper-card p-4 text-[14px] leading-[1.85] font-sans resize-none focus:outline-none focus:border-[#FF5A3D] paper-scroll"

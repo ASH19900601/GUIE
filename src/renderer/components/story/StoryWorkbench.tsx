@@ -93,7 +93,7 @@ export const StoryWorkbench: React.FC = () => {
     return new Set(issues.map((i) => i.blockId).filter((x): x is string => Boolean(x)));
   }, [project, missingAssetIds]);
 
-  // Reset pagination when scene changes (or jump to page containing selectedBlockId)
+  // Reset pagination when scene changes (or jump to page containing selectedBlockId) AND scroll selected card into view (Req 3.2)!
   useEffect(() => {
     if (!activeScene || !selectedBlockId) {
       setPage(0);
@@ -102,6 +102,12 @@ export const StoryWorkbench: React.FC = () => {
     const idx = activeScene.blocks.findIndex((b) => b.id === selectedBlockId);
     if (idx >= 0) {
       setPage(Math.floor(idx / PAGE_SIZE));
+      requestAnimationFrame(() => {
+        const el = document.querySelector(`[data-testid="story-card-${selectedBlockId}"]`);
+        if (el && typeof el.scrollIntoView === 'function') {
+          el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+      });
     }
   }, [activeScene?.id, selectedBlockId]);
 
@@ -184,13 +190,16 @@ export const StoryWorkbench: React.FC = () => {
   };
 
   // Block CRUD Helpers
-  const updateBlock = (blockId: string, nextBlock: StoryBlock) => {
-    mutateProject((draft) => {
-      const sc = draft.scenes.find((s) => s.id === activeScene.id);
-      if (!sc) return;
-      const idx = sc.blocks.findIndex((b) => b.id === blockId);
-      if (idx >= 0) sc.blocks[idx] = nextBlock;
-    });
+  const updateBlock = (blockId: string, nextBlock: StoryBlock, coalesceKey?: string) => {
+    mutateProject(
+      (draft) => {
+        const sc = draft.scenes.find((s) => s.id === activeScene.id);
+        if (!sc) return;
+        const idx = sc.blocks.findIndex((b) => b.id === blockId);
+        if (idx >= 0) sc.blocks[idx] = nextBlock;
+      },
+      coalesceKey ? { coalesceKey } : undefined
+    );
   };
 
   const insertBlockAt = (block: StoryBlock, insertIdx: number, focusAfter = false) => {
@@ -326,6 +335,10 @@ export const StoryWorkbench: React.FC = () => {
       const cur = draft.scenes.find((s) => s.id === activeScene.id);
       if (cur) {
         if (newSceneLinkMode === 'after_current') {
+          // Preserve existing downstream chain so creating a scene after current NEVER orphans oldNext!
+          if (cur.nextSceneId) {
+            newScene.nextSceneId = cur.nextSceneId;
+          }
           cur.nextSceneId = newId;
         } else if (newSceneLinkMode === 'as_choice_branch') {
           const existingChoice = [...cur.blocks].reverse().find((b): b is ChoiceBlock => b.type === 'choice');
@@ -396,22 +409,39 @@ export const StoryWorkbench: React.FC = () => {
   const moveChapterOrder = (idx: number, delta: -1 | 1) => {
     const nextIdx = idx + delta;
     if (nextIdx < 0 || nextIdx >= project.chapters.length) return;
-    mutateProject((draft) => {
-      const [item] = draft.chapters.splice(idx, 1);
-      draft.chapters.splice(nextIdx, 0, item);
-      draft.chapters.forEach((c, i) => (c.order = i));
-    });
+    mutateProject(
+      (draft) => {
+        const [item] = draft.chapters.splice(idx, 1);
+        draft.chapters.splice(nextIdx, 0, item);
+        draft.chapters.forEach((c, i) => (c.order = i));
+      },
+      { milestoneLabel: '调整章节排序前' }
+    );
   };
 
   const moveSceneOrder = (sceneId: string, delta: -1 | 1) => {
-    const idx = project.scenes.findIndex((s) => s.id === sceneId);
-    const nextIdx = idx + delta;
-    if (idx < 0 || nextIdx < 0 || nextIdx >= project.scenes.length) return;
-    mutateProject((draft) => {
-      const [item] = draft.scenes.splice(idx, 1);
-      draft.scenes.splice(nextIdx, 0, item);
-      draft.scenes.forEach((s, i) => (s.order = i));
-    });
+    const targetScene = project.scenes.find((s) => s.id === sceneId);
+    if (!targetScene) return;
+    // Swap cleanly within the same chapter so clicking up/down ALWAYS moves visibly!
+    const siblingIds = project.scenes
+      .filter((s) => s.chapterId === targetScene.chapterId)
+      .map((s) => s.id);
+    const sibPos = siblingIds.indexOf(sceneId);
+    const nextSibPos = sibPos + delta;
+    if (sibPos < 0 || nextSibPos < 0 || nextSibPos >= siblingIds.length) return;
+    const swapPartnerId = siblingIds[nextSibPos];
+    mutateProject(
+      (draft) => {
+        const i1 = draft.scenes.findIndex((s) => s.id === sceneId);
+        const i2 = draft.scenes.findIndex((s) => s.id === swapPartnerId);
+        if (i1 < 0 || i2 < 0) return;
+        const tmp = draft.scenes[i1];
+        draft.scenes[i1] = draft.scenes[i2];
+        draft.scenes[i2] = tmp;
+        draft.scenes.forEach((s, i) => (s.order = i));
+      },
+      { milestoneLabel: `调整场景「${targetScene.name}」排序前` }
+    );
   };
 
   const openDrawerAt = (idx: number) => {
@@ -516,7 +546,7 @@ export const StoryWorkbench: React.FC = () => {
           hasError={errorBlockIds.has(blk.id)}
           autoFocusTrigger={autoFocusBlockId === blk.id}
           onSelect={() => setSelectedBlockId(blk.id)}
-          onUpdate={(next) => updateBlock(blk.id, next)}
+          onUpdate={(next, coalesceKey) => updateBlock(blk.id, next, coalesceKey)}
           onDelete={() => deleteBlock(blk.id)}
           onDuplicate={() => duplicateBlock(blk, origIdx)}
           onMoveToIndex={(targetIdx) => moveBlockToIndex(origIdx, targetIdx)}
@@ -654,11 +684,14 @@ export const StoryWorkbench: React.FC = () => {
                         onClick={(e) => e.stopPropagation()}
                         onChange={(e) => setRenameText(e.target.value)}
                         onBlur={() => {
-                          if (renameText.trim()) {
-                            mutateProject((d) => {
-                              const t = d.chapters.find((x) => x.id === ch.id);
-                              if (t) t.name = renameText.trim();
-                            });
+                          if (renameText.trim() && renameText.trim() !== ch.name) {
+                            mutateProject(
+                              (d) => {
+                                const t = d.chapters.find((x) => x.id === ch.id);
+                                if (t) t.name = renameText.trim();
+                              },
+                              { milestoneLabel: `重命名章节「${ch.name}」前` }
+                            );
                           }
                           setRenamingId(null);
                         }}
@@ -755,11 +788,14 @@ export const StoryWorkbench: React.FC = () => {
                                   onClick={(e) => e.stopPropagation()}
                                   onChange={(e) => setRenameText(e.target.value)}
                                   onBlur={() => {
-                                    if (renameText.trim()) {
-                                      mutateProject((d) => {
-                                        const t = d.scenes.find((x) => x.id === sc.id);
-                                        if (t) t.name = renameText.trim();
-                                      });
+                                    if (renameText.trim() && renameText.trim() !== sc.name) {
+                                      mutateProject(
+                                        (d) => {
+                                          const t = d.scenes.find((x) => x.id === sc.id);
+                                          if (t) t.name = renameText.trim();
+                                        },
+                                        { milestoneLabel: `重命名场景「${sc.name}」前` }
+                                      );
                                     }
                                     setRenamingId(null);
                                   }}
@@ -856,21 +892,65 @@ export const StoryWorkbench: React.FC = () => {
 
           {/* Unassigned scenes (if any after deleting chapters) */}
           {project.scenes.filter((s) => !s.chapterId || !project.chapters.some((c) => c.id === s.chapterId)).length > 0 && (
-            <div className="rounded-md border border-[#E7E2D8] bg-white p-1.5">
+            <div className="rounded-md border border-[#E7E2D8] bg-white p-1.5 flex flex-col gap-0.5">
               <div className="text-[11px] font-semibold text-[#948D82] px-1.5 mb-1">未归属章节</div>
               {project.scenes
                 .filter((s) => !s.chapterId || !project.chapters.some((c) => c.id === s.chapterId))
-                .map((sc) => (
-                  <button
-                    key={sc.id}
-                    onClick={() => void setActiveSceneId(sc.id)}
-                    className={`w-full text-left px-2 py-1.5 rounded text-[12.5px] cursor-pointer ${
-                      sc.id === activeScene.id ? 'bg-[#FFF1ED] font-medium' : 'hover:bg-[#F3F0E8]'
-                    }`}
-                  >
-                    {sc.name}
-                  </button>
-                ))}
+                .map((sc) => {
+                  const isStart = sc.id === project.meta.startSceneId;
+                  return (
+                    <div
+                      key={sc.id}
+                      onClick={() => void setActiveSceneId(sc.id)}
+                      className={`group w-full px-2 py-1.5 rounded text-[12.5px] flex items-center justify-between gap-1 cursor-pointer ${
+                        sc.id === activeScene.id ? 'bg-[#FFF1ED] font-medium' : 'hover:bg-[#F3F0E8]'
+                      }`}
+                    >
+                      <span className={`truncate ${sc.disabled ? 'line-through opacity-55' : ''}`}>
+                        {sc.name}
+                      </span>
+                      <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 shrink-0">
+                        {!isStart && (
+                          <button
+                            title="设为开场场景"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              mutateProject((d) => {
+                                d.meta.startSceneId = sc.id;
+                              });
+                            }}
+                            className="p-0.5 text-[#706A60] hover:text-[#FF5A3D] cursor-pointer"
+                          >
+                            <Flag size={11} />
+                          </button>
+                        )}
+                        <button
+                          title={sc.disabled ? '重新启用' : '临时软停用'}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            mutateProject((d) => {
+                              const t = d.scenes.find((x) => x.id === sc.id);
+                              if (t) t.disabled = !t.disabled;
+                            });
+                          }}
+                          className="p-0.5 text-[#706A60] hover:text-[#FF5A3D] cursor-pointer"
+                        >
+                          {sc.disabled ? <Eye size={11} /> : <EyeOff size={11} />}
+                        </button>
+                        <button
+                          title="删除场景"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteScene(sc.id);
+                          }}
+                          className="p-0.5 text-[#706A60] hover:text-[#C93B2B] cursor-pointer"
+                        >
+                          <Trash2 size={11} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
             </div>
           )}
         </div>
@@ -1043,6 +1123,57 @@ export const StoryWorkbench: React.FC = () => {
               ))}
             </select>
 
+            <select
+              data-testid="in-scene-outline-jump"
+              value=""
+              onChange={(e) => {
+                const blkId = e.target.value;
+                if (!blkId) return;
+                setSearchQuery('');
+                setFilterType('all');
+                setFilterCharId('all');
+                setFilterErrorsOnly(false);
+                setSelectedBlockId(blkId);
+              }}
+              className="paper-input py-1 px-2 text-[12px] max-w-[165px]"
+              title="场景内大纲快速跳转"
+            >
+              <option value="">场景内大纲跳转…</option>
+              {activeScene.blocks
+                .map((b, i) => ({ b, i }))
+                .filter(
+                  ({ b, i }) =>
+                    i === 0 ||
+                    i === activeScene.blocks.length - 1 ||
+                    b.type === 'background' ||
+                    b.type === 'choice' ||
+                    b.type === 'condition_branch' ||
+                    b.type === 'multilayer_stage' ||
+                    (b.type === 'flow' && ['ending', 'jump_scene', 'call_scene'].includes(b.action))
+                )
+                .map(({ b, i }) => {
+                  const tag =
+                    b.type === 'choice'
+                      ? `选择：${b.prompt?.slice(0, 12) || `${b.options.length}选项`}`
+                      : b.type === 'condition_branch'
+                      ? '条件分支'
+                      : b.type === 'background'
+                      ? '切换背景'
+                      : b.type === 'multilayer_stage'
+                      ? '多层舞台'
+                      : b.type === 'flow' && b.action === 'ending'
+                      ? `结局：${b.endingTitle || '终章'}`
+                      : b.type === 'dialogue'
+                      ? b.text.slice(0, 14) || '对白'
+                      : '节点';
+                  return (
+                    <option key={b.id} value={b.id}>
+                      #{i + 1} {tag}
+                    </option>
+                  );
+                })}
+            </select>
+
             <label className="inline-flex items-center gap-1 text-[12px] text-[#706A60] cursor-pointer">
               <input
                 type="checkbox"
@@ -1056,10 +1187,10 @@ export const StoryWorkbench: React.FC = () => {
         )}
 
         {/* Active Center View Body */}
-        <div id="guie-main-scroll" className="flex-1 min-h-0 overflow-hidden">
+        <div className="flex-1 min-h-0 overflow-hidden">
           {storyViewMode === 'cards' && (
             <div className="h-full flex flex-col overflow-hidden">
-              <div className="flex-1 overflow-y-auto paper-scroll px-4 py-3 flex flex-col gap-1">
+              <div id="guie-main-scroll" className="flex-1 overflow-y-auto paper-scroll px-4 py-3 flex flex-col gap-1">
                 {filteredEntries.length === 0 ? (
                   <div className="py-16 text-center">
                     <div className="text-[13.5px] text-[#706A60] mb-3">
@@ -1094,6 +1225,18 @@ export const StoryWorkbench: React.FC = () => {
                     >
                       <ChevronLeft size={13} /> 上一段
                     </button>
+                    <select
+                      value={safePage}
+                      onChange={(e) => setPage(Number(e.target.value))}
+                      className="paper-input py-0.5 px-1.5 text-[11.5px]"
+                      title="直接跳转到指定分段"
+                    >
+                      {Array.from({ length: totalPages }, (_, pi) => (
+                        <option key={pi} value={pi}>
+                          第 {pi + 1} 段 (#{pi * PAGE_SIZE + 1}–#{Math.min(filteredEntries.length, (pi + 1) * PAGE_SIZE)})
+                        </option>
+                      ))}
+                    </select>
                     <button
                       data-testid="page-next-btn"
                       disabled={safePage >= totalPages - 1}
@@ -1297,30 +1440,79 @@ export const StoryWorkbench: React.FC = () => {
                   className="paper-input w-full"
                 />
               </div>
-              <div>
-                <label className="block text-[12px] font-medium mb-1">前往目标场景</label>
-                <select
-                  value={choiceModalContext.opt.targetSceneId ?? ''}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    mutateProject((d) => {
-                      const sc = d.scenes.find((s) => s.id === choiceModalContext.sc.id);
-                      const blk = sc?.blocks.find((b) => b.id === choiceModalContext.blk.id);
-                      if (blk?.type === 'choice') {
-                        const o = blk.options.find((x) => x.id === choiceModalContext.opt.id);
-                        if (o) o.targetSceneId = val || undefined;
-                      }
-                    });
-                  }}
-                  className="paper-input w-full"
-                >
-                  <option value="">选择场景…</option>
-                  {project.scenes.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-[12px] font-medium mb-1">触发方式</label>
+                  <select
+                    value={choiceModalContext.opt.targetType}
+                    onChange={(e) => {
+                      const val = e.target.value as 'scene' | 'continue' | 'call_scene' | 'ending';
+                      mutateProject((d) => {
+                        const sc = d.scenes.find((s) => s.id === choiceModalContext.sc.id);
+                        const blk = sc?.blocks.find((b) => b.id === choiceModalContext.blk.id);
+                        if (blk?.type === 'choice') {
+                          const o = blk.options.find((x) => x.id === choiceModalContext.opt.id);
+                          if (o) o.targetType = val;
+                        }
+                      });
+                    }}
+                    className="paper-input w-full text-[12.5px]"
+                  >
+                    <option value="scene">前往场景</option>
+                    <option value="continue">继续本场景</option>
+                    <option value="call_scene">调用公共剧情</option>
+                    <option value="ending">直接达成结局</option>
+                  </select>
+                </div>
+                {(choiceModalContext.opt.targetType === 'scene' || choiceModalContext.opt.targetType === 'call_scene') && (
+                  <div>
+                    <label className="block text-[12px] font-medium mb-1">前往目标场景</label>
+                    <select
+                      value={choiceModalContext.opt.targetSceneId ?? ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        mutateProject((d) => {
+                          const sc = d.scenes.find((s) => s.id === choiceModalContext.sc.id);
+                          const blk = sc?.blocks.find((b) => b.id === choiceModalContext.blk.id);
+                          if (blk?.type === 'choice') {
+                            const o = blk.options.find((x) => x.id === choiceModalContext.opt.id);
+                            if (o) o.targetSceneId = val || undefined;
+                          }
+                        });
+                      }}
+                      className="paper-input w-full text-[12.5px]"
+                    >
+                      <option value="">选择场景…</option>
+                      {project.scenes.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                {choiceModalContext.opt.targetType === 'ending' && (
+                  <div>
+                    <label className="block text-[12px] font-medium mb-1">结局标题</label>
+                    <input
+                      type="text"
+                      value={choiceModalContext.opt.endingTitle ?? ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        mutateProject((d) => {
+                          const sc = d.scenes.find((s) => s.id === choiceModalContext.sc.id);
+                          const blk = sc?.blocks.find((b) => b.id === choiceModalContext.blk.id);
+                          if (blk?.type === 'choice') {
+                            const o = blk.options.find((x) => x.id === choiceModalContext.opt.id);
+                            if (o) o.endingTitle = val;
+                          }
+                        });
+                      }}
+                      placeholder="例如：真结局"
+                      className="paper-input w-full text-[12.5px]"
+                    />
+                  </div>
+                )}
               </div>
               <ConditionEditor
                 value={choiceModalContext.opt.condition}
@@ -1336,6 +1528,48 @@ export const StoryWorkbench: React.FC = () => {
                   });
                 }}
               />
+              {choiceModalContext.opt.condition && choiceModalContext.opt.condition.rules.length > 0 && (
+                <div className="flex items-center gap-2 text-[12px]">
+                  <span className="text-[#706A60] shrink-0">未满足时：</span>
+                  <select
+                    value={choiceModalContext.opt.lockedBehavior}
+                    onChange={(e) => {
+                      const val = e.target.value as 'hide' | 'disable';
+                      mutateProject((d) => {
+                        const sc = d.scenes.find((s) => s.id === choiceModalContext.sc.id);
+                        const blk = sc?.blocks.find((b) => b.id === choiceModalContext.blk.id);
+                        if (blk?.type === 'choice') {
+                          const o = blk.options.find((x) => x.id === choiceModalContext.opt.id);
+                          if (o) o.lockedBehavior = val;
+                        }
+                      });
+                    }}
+                    className="paper-input py-1 text-[12px]"
+                  >
+                    <option value="hide">隐藏该选项</option>
+                    <option value="disable">灰显并提示原因</option>
+                  </select>
+                  {choiceModalContext.opt.lockedBehavior === 'disable' && (
+                    <input
+                      type="text"
+                      value={choiceModalContext.opt.disabledHint ?? ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        mutateProject((d) => {
+                          const sc = d.scenes.find((s) => s.id === choiceModalContext.sc.id);
+                          const blk = sc?.blocks.find((b) => b.id === choiceModalContext.blk.id);
+                          if (blk?.type === 'choice') {
+                            const o = blk.options.find((x) => x.id === choiceModalContext.opt.id);
+                            if (o) o.disabledHint = val;
+                          }
+                        });
+                      }}
+                      placeholder="禁用提示文字"
+                      className="paper-input flex-1 py-1 text-[12px]"
+                    />
+                  )}
+                </div>
+              )}
               <StateEffectsEditor
                 effects={choiceModalContext.opt.effects}
                 variables={project.variables}

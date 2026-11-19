@@ -59,6 +59,7 @@ export function createEmptyStage(
     speakerName: null,
     speakerColor: project.appearance.dialogueBox.nameColor || '#FFB399',
     speakerAvatarAssetId: null,
+    speakerDialogueBoxBgAssetId: null,
     text: '',
     nvlMode: false,
     nvlHistory: [],
@@ -244,6 +245,7 @@ export function applyBlockToStage(
       next.speakerName = speakerName;
       next.speakerColor = speakerColor;
       next.speakerAvatarAssetId = char?.avatarAssetId ?? null;
+      next.speakerDialogueBoxBgAssetId = char?.dialogueBoxBgAssetId ?? null;
       next.text = interpolated;
       const useNvl = Boolean(block.nvlMode ?? char?.nvlDefault);
       next.nvlMode = useNvl;
@@ -354,6 +356,257 @@ export function simulateStageAtBlock(
   }
 
   return { stage, steps };
+}
+
+/**
+ * Simulates a scene for the interactive timeline scrubber so the creator can scrub BOTH
+ * backward AND forward from the clicked card (up to the next branch/ending or end of scene).
+ */
+export function simulateSceneTimeline(
+  project: ProjectData,
+  sceneId: string,
+  targetBlockId?: string | null,
+  variableOverrides?: Record<string, number | boolean | string>
+): { stage: PreviewStageState; steps: TimelineStep[]; targetStepIndex: number } {
+  const vars = getInitialVariables(project, variableOverrides);
+  let stage = createEmptyStage(project, vars);
+  const scene = project.scenes.find((s) => s.id === sceneId);
+  const steps: TimelineStep[] = [];
+  if (!scene || scene.blocks.length === 0) {
+    return { stage, steps, targetStepIndex: 0 };
+  }
+
+  const targetIdx = targetBlockId
+    ? scene.blocks.findIndex((b) => b.id === targetBlockId)
+    : 0;
+  const safeTarget = targetIdx >= 0 ? targetIdx : 0;
+
+  let targetStage = stage;
+  for (let i = 0; i < scene.blocks.length; i += 1) {
+    const blk = scene.blocks[i];
+    stage = applyBlockToStage(stage, blk, project);
+    steps.push({
+      index: i,
+      sceneId: scene.id,
+      sceneName: scene.name,
+      blockId: blk.id,
+      summary: summarizeBlockForTimeline(blk, project),
+      variablesSnapshot: { ...stage.variables },
+      callStack: [scene.name],
+      stageSnapshot: structuredClone(stage),
+    });
+    if (i === safeTarget) {
+      targetStage = structuredClone(stage);
+    }
+    // Stop linear pre-simulation after a choice/condition_branch/ending that lies at or past target
+    if (
+      i >= safeTarget &&
+      (blk.type === 'choice' ||
+        blk.type === 'condition_branch' ||
+        (blk.type === 'flow' &&
+          (blk.action === 'ending' || blk.action === 'jump_scene' || blk.action === 'call_scene')))
+    ) {
+      break;
+    }
+  }
+
+  return {
+    stage: targetStage,
+    steps,
+    targetStepIndex: Math.min(safeTarget, Math.max(0, steps.length - 1)),
+  };
+}
+
+export interface CallReturnFrame {
+  sceneId: string;
+  sceneName: string;
+  nextBlockIndex: number;
+}
+
+/**
+ * Advances one step in interactive preview, accurately evaluating condition_branch,
+ * flow (jump_scene, call_scene, return_from_call, ending), and scene.nextSceneId!
+ */
+export function advancePreviewStep(
+  project: ProjectData,
+  currentStep: TimelineStep,
+  currentStage: PreviewStageState,
+  returnStack: CallReturnFrame[]
+): {
+  nextStep: TimelineStep | null;
+  nextReturnStack: CallReturnFrame[];
+} {
+  const sc = project.scenes.find((s) => s.id === currentStep.sceneId);
+  if (!sc) return { nextStep: null, nextReturnStack: returnStack };
+  const curIdx = sc.blocks.findIndex((b) => b.id === currentStep.blockId);
+  if (curIdx < 0) return { nextStep: null, nextReturnStack: returnStack };
+
+  const curBlk = sc.blocks[curIdx];
+  const nextStack = [...returnStack];
+
+  const makeEndingStep = (title: string, subtitle?: string): TimelineStep => {
+    const endStage: PreviewStageState = {
+      ...structuredClone(currentStage),
+      activeChoice: null,
+      activeEnding: { title, subtitle },
+    };
+    return {
+      index: currentStep.index + 1,
+      sceneId: sc.id,
+      sceneName: sc.name,
+      blockId: curBlk.id,
+      summary: `达成结局：${title}`,
+      variablesSnapshot: { ...endStage.variables },
+      callStack: currentStep.callStack,
+      stageSnapshot: endStage,
+    };
+  };
+
+  const enterSceneBlock = (
+    targetSceneId: string,
+    blockIndex: number,
+    callStackNames: string[],
+    choiceLabel?: string
+  ): TimelineStep | null => {
+    const targetScene = project.scenes.find((s) => s.id === targetSceneId);
+    const targetBlk = targetScene?.blocks[blockIndex];
+    if (!targetScene || !targetBlk) return null;
+    const nextStage = applyBlockToStage(structuredClone(currentStage), targetBlk, project);
+    return {
+      index: currentStep.index + 1,
+      sceneId: targetScene.id,
+      sceneName: targetScene.name,
+      blockId: targetBlk.id,
+      summary: summarizeBlockForTimeline(targetBlk, project),
+      choiceTakenLabel: choiceLabel,
+      variablesSnapshot: { ...nextStage.variables },
+      callStack: callStackNames,
+      stageSnapshot: nextStage,
+    };
+  };
+
+  // 1. Evaluate automatic conditional branch
+  if (curBlk.type === 'condition_branch') {
+    const passed = evaluateConditionGroup(curBlk.condition, project.variables, currentStage.variables);
+    if (passed) {
+      if (curBlk.trueTargetType === 'ending') {
+        return {
+          nextStep: makeEndingStep(curBlk.trueEndingTitle || '故事终章'),
+          nextReturnStack: nextStack,
+        };
+      }
+      if (curBlk.trueTargetType === 'call_scene' && curBlk.trueTargetSceneId) {
+        nextStack.push({ sceneId: sc.id, sceneName: sc.name, nextBlockIndex: curIdx + 1 });
+        const ts = project.scenes.find((s) => s.id === curBlk.trueTargetSceneId);
+        return {
+          nextStep: enterSceneBlock(
+            curBlk.trueTargetSceneId,
+            0,
+            [...currentStep.callStack, ts?.name ?? '公共剧情'],
+            '条件成立（调用）'
+          ),
+          nextReturnStack: nextStack,
+        };
+      }
+      if (curBlk.trueTargetSceneId) {
+        const ts = project.scenes.find((s) => s.id === curBlk.trueTargetSceneId);
+        return {
+          nextStep: enterSceneBlock(
+            curBlk.trueTargetSceneId,
+            0,
+            [ts?.name ?? '目标场景'],
+            '条件成立'
+          ),
+          nextReturnStack: nextStack,
+        };
+      }
+    } else {
+      if (curBlk.falseTargetType === 'ending') {
+        return {
+          nextStep: makeEndingStep(curBlk.falseEndingTitle || '故事终章'),
+          nextReturnStack: nextStack,
+        };
+      }
+      if (curBlk.falseTargetType === 'scene' && curBlk.falseTargetSceneId) {
+        const ts = project.scenes.find((s) => s.id === curBlk.falseTargetSceneId);
+        return {
+          nextStep: enterSceneBlock(
+            curBlk.falseTargetSceneId,
+            0,
+            [ts?.name ?? '否则分支'],
+            '条件未满足'
+          ),
+          nextReturnStack: nextStack,
+        };
+      }
+    }
+  }
+
+  // 2. Evaluate explicit flow control blocks
+  if (curBlk.type === 'flow') {
+    if (curBlk.action === 'ending') {
+      return { nextStep: null, nextReturnStack: nextStack };
+    }
+    if (curBlk.action === 'jump_scene' && curBlk.targetSceneId) {
+      const ts = project.scenes.find((s) => s.id === curBlk.targetSceneId);
+      return {
+        nextStep: enterSceneBlock(curBlk.targetSceneId, 0, [ts?.name ?? '目标场景']),
+        nextReturnStack: nextStack,
+      };
+    }
+    if (curBlk.action === 'call_scene' && curBlk.targetSceneId) {
+      nextStack.push({ sceneId: sc.id, sceneName: sc.name, nextBlockIndex: curIdx + 1 });
+      const ts = project.scenes.find((s) => s.id === curBlk.targetSceneId);
+      return {
+        nextStep: enterSceneBlock(
+          curBlk.targetSceneId,
+          0,
+          [...currentStep.callStack, ts?.name ?? '公共剧情']
+        ),
+        nextReturnStack: nextStack,
+      };
+    }
+    if (curBlk.action === 'return_from_call' && nextStack.length > 0) {
+      const caller = nextStack.pop()!;
+      const poppedNames =
+        currentStep.callStack.length > 1 ? currentStep.callStack.slice(0, -1) : [caller.sceneName];
+      return {
+        nextStep: enterSceneBlock(caller.sceneId, caller.nextBlockIndex, poppedNames),
+        nextReturnStack: nextStack,
+      };
+    }
+  }
+
+  // 3. Normal sequential step inside current scene
+  if (curIdx + 1 < sc.blocks.length) {
+    return {
+      nextStep: enterSceneBlock(sc.id, curIdx + 1, currentStep.callStack),
+      nextReturnStack: nextStack,
+    };
+  }
+
+  // 4. End of scene: return to caller if inside a `call_scene`, else follow `nextSceneId`
+  if (nextStack.length > 0) {
+    const caller = nextStack.pop()!;
+    const poppedNames =
+      currentStep.callStack.length > 1 ? currentStep.callStack.slice(0, -1) : [caller.sceneName];
+    return {
+      nextStep: enterSceneBlock(caller.sceneId, caller.nextBlockIndex, poppedNames),
+      nextReturnStack: nextStack,
+    };
+  }
+
+  if (sc.nextSceneId) {
+    const ts = project.scenes.find((s) => s.id === sc.nextSceneId);
+    if (ts && ts.blocks.length > 0) {
+      return {
+        nextStep: enterSceneBlock(ts.id, 0, [ts.name]),
+        nextReturnStack: nextStack,
+      };
+    }
+  }
+
+  return { nextStep: null, nextReturnStack: nextStack };
 }
 
 export function summarizeBlockForTimeline(block: StoryBlock, project: ProjectData): string {

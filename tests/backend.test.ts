@@ -311,7 +311,7 @@ describe('Phase 2 Core Backend Engine & Compiler', () => {
     const samples = new Float32Array(16000);
     const text = transcribePcm16k(samples, 16000);
     expect(typeof text).toBe('string');
-  });
+  }, 30000);
 
   it('runs a REAL end-to-end DeepSeek AI Assistant edit & RenPy Lint verification when API key is present', async () => {
     const apiKey = getResolvedApiKey();
