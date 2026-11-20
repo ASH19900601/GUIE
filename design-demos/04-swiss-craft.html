@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GUIE · 方案 D：瑞士现代工作室（Craft × Apple Studio）</title>
+  <style>
+    :root {
+      --bg-mist: #F3F4F6;
+      --surface: #FFFFFF;
+      --surface-soft: #F8F9FB;
+      --line: rgba(17, 19, 24, 0.065);
+      --ink-1: #111318;
+      --ink-2: #4B5565;
+      --ink-3: #8892A2;
+      --pine: #196953;
+      --pine-soft: rgba(25, 105, 83, 0.09);
+      --shadow-sheet: 0 1px 2px rgba(17, 19, 24, 0.04), 0 12px 32px rgba(17, 19, 24, 0.045);
+      --shadow-sm: 0 1px 2px rgba(17, 19, 24, 0.05);
+      --font-sans: "Segoe UI Variable Text", "Segoe UI", "Noto Sans SC", "Microsoft YaHei UI", sans-serif;
+      --font-mono: "Cascadia Code", Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%; background: var(--bg-mist); color: var(--ink-1);
+      font-family: var(--font-sans); font-size: 13.5px;
+      -webkit-font-smoothing: antialiased; overflow: hidden;
+    }
+    button { font-family: inherit; border: none; background: none; color: inherit; cursor: pointer; }
+
+    .app { display: flex; flex-direction: column; height: 100vh; width: 100vw; }
+
+    /* Airy Borderless Floating Topbar */
+    .topbar {
+      height: 54px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 18px;
+      user-select: none;
+    }
+    .tb-left { display: flex; align-items: center; gap: 10px; }
+    .app-mark {
+      width: 26px; height: 26px; border-radius: 8px;
+      background: var(--ink-1); color: #FFF;
+      display: grid; place-items: center; font-size: 12px; font-weight: 700;
+    }
+    .doc-title { font-weight: 600; font-size: 13.5px; letter-spacing: -0.01em; }
+    .doc-status { font-size: 12px; color: var(--ink-3); }
+
+    .pill-nav {
+      display: inline-flex; padding: 3px; border-radius: 99px;
+      background: rgba(17, 19, 24, 0.055); gap: 2px;
+    }
+    .pill-nav button {
+      padding: 5px 15px; border-radius: 99px; font-size: 12.5px; color: var(--ink-2);
+      transition: all 150ms;
+    }
+    .pill-nav button.active {
+      background: var(--surface); color: var(--ink-1); font-weight: 600;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .tb-right { display: flex; align-items: center; gap: 8px; }
+    .btn-soft {
+      padding: 6px 13px; border-radius: 99px; font-size: 12.5px; color: var(--ink-2);
+      background: rgba(255,255,255,0.75); box-shadow: var(--shadow-sm);
+      transition: background 140ms, color 140ms;
+    }
+    .btn-soft:hover { background: var(--surface); color: var(--ink-1); }
+    .btn-jet {
+      padding: 6px 16px; border-radius: 99px; font-size: 12.5px; font-weight: 500;
+      background: var(--ink-1); color: #FFF;
+      transition: opacity 140ms;
+    }
+    .btn-jet:hover { opacity: 0.88; }
+
+    /* Main Floating Workspace Layout (No ugly grid walls — sheets float on mist!) */
+    .workspace {
+      flex: 1; display: flex; gap: 14px;
+      padding: 0 16px 16px; min-height: 0;
+    }
+    .workspace.hide { display: none; }
+
+    /* Borderless Slim Mist Sidebar */
+    .sidebar {
+      width: 214px; flex-shrink: 0;
+      display: flex; flex-direction: column;
+      padding: 6px 4px;
+      user-select: none;
+    }
+    .sb-section { font-size: 11px; font-weight: 600; color: var(--ink-3); padding: 10px 10px 6px; letter-spacing: 0.03em; }
+    .sb-nav { display: flex; flex-direction: column; gap: 2px; }
+    .sb-btn {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 7px 10px; border-radius: 9px; font-size: 13px; color: var(--ink-2);
+      transition: background 140ms, color 140ms;
+    }
+    .sb-btn:hover { background: rgba(17,19,24,0.045); color: var(--ink-1); }
+    .sb-btn.active { background: var(--surface); color: var(--ink-1); font-weight: 600; box-shadow: var(--shadow-sm); }
+    .sb-count { font-size: 11px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+    .sb-scroll { flex: 1; overflow-y: auto; }
+    .sb-ai {
+      margin-top: 8px; padding: 9px 12px; border-radius: 12px;
+      background: var(--surface); box-shadow: var(--shadow-sm);
+      display: flex; align-items: center; justify-content: space-between;
+      font-size: 12.5px; font-weight: 500; color: var(--ink-1);
+    }
+    .sb-ai span:first-child { display: flex; align-items: center; gap: 7px; }
+    .pine-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--pine); }
+
+    /* Center Floating White Document Sheet (Craft-style — ONE sheet, NOT 20 boxes!) */
+    .sheet-container {
+      flex: 1; min-width: 0;
+      background: var(--surface);
+      border-radius: 16px;
+      box-shadow: var(--shadow-sheet);
+      display: flex; flex-direction: column;
+      overflow: hidden;
+    }
+    .sheet-top {
+      padding: 14px 26px; border-bottom: 1px solid var(--line);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .sheet-crumb { font-size: 12px; color: var(--ink-3); display: flex; align-items: center; gap: 6px; }
+    .sheet-crumb strong { color: var(--ink-1); font-weight: 600; }
+    .sheet-tools { display: flex; gap: 6px; }
+    .chip-btn {
+      padding: 4px 10px; border-radius: 7px; font-size: 12px; color: var(--ink-2);
+      background: var(--surface-soft); transition: background 140ms;
+    }
+    .chip-btn:hover { background: #ECEEF2; color: var(--ink-1); }
+
+    .sheet-scroll { flex: 1; overflow-y: auto; padding: 30px 42px 56px; }
+    .sheet-inner { max-width: 640px; margin: 0 auto; }
+    .sheet-h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.025em; margin-bottom: 6px; }
+    .sheet-sub { font-size: 13px; color: var(--ink-3); margin-bottom: 26px; }
+
+    /* Clean Unified Stream inside the Single White Sheet */
+    .block-stream { display: flex; flex-direction: column; gap: 4px; }
+    .s-block {
+      position: relative; padding: 12px 14px; border-radius: 11px;
+      cursor: pointer; transition: background 140ms;
+    }
+    .s-block:hover { background: var(--surface-soft); }
+    .s-block.selected { background: #F2F7F5; }
+
+    .s-block-head {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 4px;
+    }
+    .s-num { font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); }
+    .s-block.selected .s-num { color: var(--pine); font-weight: 600; }
+    .s-tag {
+      font-size: 11px; font-weight: 600; padding: 1.5px 7px; border-radius: 6px;
+      background: var(--surface-soft); color: var(--ink-2);
+    }
+    .s-block.selected .s-tag { background: var(--pine-soft); color: var(--pine); }
+    .s-speaker { font-size: 13px; font-weight: 600; color: var(--ink-1); }
+    .s-mood { font-size: 11.5px; color: var(--ink-3); }
+    .s-right-meta { margin-left: auto; font-size: 11.5px; color: var(--ink-3); }
+
+    .s-body { font-size: 14.5px; line-height: 1.72; color: var(--ink-1); padding-left: 24px; }
+    .s-body.muted { font-size: 13px; color: var(--ink-2); }
+
+    .s-choices { padding-left: 24px; margin-top: 8px; display: flex; flex-direction: column; gap: 5px; }
+    .s-choice-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 7px 11px; border-radius: 8px;
+      background: var(--surface-soft); font-size: 13px;
+    }
+    .s-block.selected .s-choice-row { background: var(--surface); box-shadow: var(--shadow-sm); }
+    .s-choice-row.locked { opacity: 0.48; }
+    .s-cond { font-size: 11px; color: var(--pine); background: var(--pine-soft); padding: 1px 7px; border-radius: 99px; }
+
+    /* Right Detached Floating Inspector Card */
+    .inspector-card {
+      width: 396px; flex-shrink: 0;
+      background: var(--surface);
+      border-radius: 16px;
+      box-shadow: var(--shadow-sheet);
+      padding: 18px;
+      display: flex; flex-direction: column; gap: 16px;
+      overflow-y: auto;
+    }
+    .ins-top { display: flex; align-items: center; justify-content: space-between; }
+    .ins-title { font-size: 13px; font-weight: 600; }
+    .ins-badge {
+      font-family: var(--font-mono); font-size: 11.5px;
+      padding: 2px 8px; border-radius: 99px;
+      background: var(--surface-soft); color: var(--ink-2);
+    }
+
+    .stage-shell {
+      position: relative; width: 100%; aspect-ratio: 16 / 9;
+      border-radius: 11px; overflow: hidden; background: #14161A;
+      box-shadow: 0 8px 20px rgba(17,19,24,0.10);
+    }
+    .st-choices {
+      position: absolute; inset: 12px 22px 64px;
+      display: flex; flex-direction: column; justify-content: center; gap: 6px; z-index: 4;
+    }
+    .st-btn {
+      padding: 7px 12px; border-radius: 9px;
+      background: rgba(255,255,255,0.92); backdrop-filter: blur(8px);
+      color: var(--ink-1); font-size: 12px; font-weight: 500;
+      display: flex; justify-content: space-between; align-items: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.14); transition: all 130ms;
+    }
+    .st-btn:hover:not(.locked) { background: var(--pine); color: #FFF; }
+    .st-btn.locked { opacity: 0.48; cursor: not-allowed; }
+    .st-box {
+      position: absolute; left: 9px; right: 9px; bottom: 9px;
+      background: rgba(17, 19, 24, 0.80); backdrop-filter: blur(12px);
+      border-radius: 9px; padding: 8px 11px; color: #FFF; z-index: 3;
+    }
+    .st-sp { font-size: 11px; font-weight: 600; margin-bottom: 2px; }
+    .st-tx { font-size: 12px; line-height: 1.5; color: rgba(255,255,255,0.92); }
+
+    /* Tactile Timeline Pills */
+    .tl-bar { display: flex; align-items: center; gap: 8px; }
+    .tl-nav {
+      width: 28px; height: 28px; border-radius: 8px;
+      background: var(--surface-soft); color: var(--ink-2);
+      display: grid; place-items: center; font-size: 12px;
+    }
+    .tl-nav:hover { background: #EAECEF; color: var(--ink-1); }
+    .tl-dots { flex: 1; display: grid; grid-template-columns: repeat(8, 1fr); gap: 5px; }
+    .tl-seg {
+      height: 6px; border-radius: 99px; background: #E5E7EC;
+      cursor: pointer; transition: all 140ms;
+    }
+    .tl-seg.done { background: rgba(25, 105, 83, 0.35); }
+    .tl-seg.active { background: var(--pine); transform: scaleY(1.35); }
+
+    /* Tactile State Controls */
+    .ins-subhead { font-size: 11.5px; font-weight: 600; color: var(--ink-3); margin-bottom: 8px; }
+    .ctrl-stack { display: flex; flex-direction: column; gap: 8px; }
+    .ctrl-item {
+      padding: 10px 12px; border-radius: 11px; background: var(--surface-soft);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .ctrl-name { font-size: 13px; font-weight: 500; }
+    .ctrl-hint { font-size: 11px; color: var(--ink-3); margin-top: 1px; }
+    .sw-step { display: inline-flex; align-items: center; gap: 6px; }
+    .sw-step button {
+      width: 24px; height: 24px; border-radius: 7px;
+      background: var(--surface); box-shadow: var(--shadow-sm); font-size: 13px;
+    }
+    .sw-step span { min-width: 18px; text-align: center; font-weight: 600; font-variant-numeric: tabular-nums; }
+    /* iOS-like Tactile Switch */
+    .switch {
+      width: 38px; height: 22px; border-radius: 99px;
+      background: #D5D9E0; position: relative; transition: background 160ms;
+    }
+    .switch::after {
+      content: ""; position: absolute; top: 2px; left: 2px;
+      width: 18px; height: 18px; border-radius: 50%; background: #FFF;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.18); transition: transform 160ms;
+    }
+    .switch.on { background: var(--pine); }
+    .switch.on::after { transform: translateX(16px); }
+
+    /* Crisp Craft/Apple Welcome Gallery */
+    .welcome { display: none; flex: 1; padding: 28px 48px 48px; overflow-y: auto; }
+    .welcome.show { display: block; }
+    .w-sheet {
+      max-width: 960px; margin: 0 auto;
+      background: var(--surface); border-radius: 20px;
+      box-shadow: var(--shadow-sheet); padding: 40px 44px;
+    }
+    .w-top { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 32px; }
+    .w-h1 { font-size: 28px; font-weight: 700; letter-spacing: -0.025em; margin-bottom: 6px; }
+    .w-sub { font-size: 13.5px; color: var(--ink-2); }
+    .w-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+    .w-card {
+      border-radius: 14px; background: var(--surface-soft); overflow: hidden;
+      cursor: pointer; transition: transform 150ms, box-shadow 150ms;
+    }
+    .w-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-sheet); background: var(--surface); }
+    .w-cover { aspect-ratio: 16 / 10; padding: 14px; display: flex; align-items: flex-end; }
+    .w-tag {
+      font-size: 11px; color: #FFF; padding: 3px 9px; border-radius: 99px;
+      background: rgba(17,19,24,0.42); backdrop-filter: blur(6px);
+    }
+    .w-info { padding: 14px 16px; }
+    .w-name { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+    .w-meta { font-size: 12px; color: var(--ink-3); }
+
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-thumb { background: rgba(17,19,24,0.12); border-radius: 99px; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="tb-left">
+        <span class="app-mark">G</span>
+        <span class="doc-title">樱庭微风 · 夏日物语</span>
+        <span class="doc-status">· 已保存</span>
+      </div>
+
+      <div class="pill-nav" id="pillNav">
+        <button class="active" data-mode="workspace">故事工作台</button>
+        <button data-mode="welcome">作品库</button>
+      </div>
+
+      <div class="tb-right">
+        <button class="btn-soft">历史快照</button>
+        <button class="btn-soft">导出游戏</button>
+        <button class="btn-jet">▶ 试玩预览</button>
+      </div>
+    </header>
+
+    <main class="workspace" id="wsView">
+      <aside class="sidebar">
+        <div class="sb-section">创作模块</div>
+        <div class="sb-nav">
+          <button class="sb-btn active"><span>故事剧本</span><span class="sb-count">6 幕</span></button>
+          <button class="sb-btn"><span>角色与状态</span><span class="sb-count">4</span></button>
+          <button class="sb-btn"><span>素材库</span><span class="sb-count">18</span></button>
+          <button class="sb-btn"><span>外观与扩展</span></button>
+        </div>
+
+        <div class="sb-section" style="margin-top:8px">章节场景</div>
+        <div class="sb-scroll" id="sbScenes"></div>
+
+        <button class="sb-ai">
+          <span><span class="pine-dot"></span> AI 创作助手</span>
+          <span style="font-size:11px;color:var(--ink-3)">⌘J</span>
+        </button>
+      </aside>
+
+      <!-- Single Elevated White Document Sheet -->
+      <section class="sheet-container">
+        <div class="sheet-top">
+          <div class="sheet-crumb">
+            <span>序章</span><span>›</span><strong>黄昏教室的邀请</strong>
+          </div>
+          <div class="sheet-tools">
+            <button class="chip-btn">纯文本</button>
+            <button class="chip-btn">流程图</button>
+            <button class="chip-btn">离线语音转写</button>
+            <button class="chip-btn" style="color:var(--pine);background:var(--pine-soft);font-weight:500">＋ 添加内容</button>
+          </div>
+        </div>
+
+        <div class="sheet-scroll">
+          <div class="sheet-inner">
+            <h1 class="sheet-h1">黄昏教室的邀请</h1>
+            <p class="sheet-sub">序章 · 共 8 节剧情 · 点击任意节拍同步预览右侧舞台</p>
+            <div class="block-stream" id="blockStream"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Floating Right Inspector -->
+      <aside class="inspector-card">
+        <div class="ins-top">
+          <span class="ins-title">实时画面预览</span>
+          <span class="ins-badge" id="stepBadge">05 / 08</span>
+        </div>
+
+        <div class="stage-shell" id="stageBox"></div>
+
+        <div class="tl-bar">
+          <button class="tl-nav" id="prevBtn">‹</button>
+          <div class="tl-dots" id="tlDots"></div>
+          <button class="tl-nav" id="nextBtn">›</button>
+        </div>
+
+        <div>
+          <div class="ins-subhead">实时状态调试</div>
+          <div class="ctrl-stack">
+            <div class="ctrl-item">
+              <div>
+                <div class="ctrl-name">林夏好感度</div>
+                <div class="ctrl-hint">隐藏分支解锁条件 ≥ 3</div>
+              </div>
+              <div class="sw-step">
+                <button id="affMinus">−</button>
+                <span id="affVal">2</span>
+                <button id="affPlus">+</button>
+              </div>
+            </div>
+            <div class="ctrl-item">
+              <div>
+                <div class="ctrl-name">天台钥匙</div>
+                <div class="ctrl-hint">控制秘密天台选项</div>
+              </div>
+              <button class="switch on" id="keyToggle" aria-label="天台钥匙开关"></button>
+            </div>
+            <div class="ctrl-item">
+              <div>
+                <div class="ctrl-name">所属社团</div>
+                <div class="ctrl-hint">文本变量</div>
+              </div>
+              <span style="font-size:12.5px;font-weight:500;color:var(--ink-2)">天文社</span>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </main>
+
+    <section class="welcome" id="welView">
+      <div class="w-sheet">
+        <div class="w-top">
+          <div>
+            <h1 class="w-h1">你的视觉小说作品</h1>
+            <p class="w-sub">零配置开箱即用 · 内置 Ren'Py 引擎、多语种字体与离线语音转剧本</p>
+          </div>
+          <button class="btn-jet" style="padding:9px 20px;font-size:13px" onclick="setMode('workspace')">＋ 创建新作品</button>
+        </div>
+        <div class="w-grid" id="wGrid"></div>
+      </div>
+    </section>
+  </div>
+
+  <script src="shared/story-data.js"></script>
+  <script>
+    const DATA = window.GUIE_DEMO_DATA;
+    const beats = DATA.beats;
+    let activeIdx = 4;
+    const vars = { ...DATA.initialVars };
+    let chosenOption = null;
+
+    function renderSidebar() {
+      document.getElementById('sbScenes').innerHTML = DATA.project.chapters.map(ch => `
+        <div style="font-size:11px;color:var(--ink-3);padding:8px 10px 3px">${ch.title}</div>
+        ${ch.scenes.map(sc => `
+          <div class="sb-btn ${sc.active ? 'active' : ''}" style="${sc.muted ? 'opacity:0.48' : ''}">
+            <span>${sc.title}</span><span class="sb-count">${sc.beats}</span>
+          </div>
+        `).join('')}
+      `).join('');
+    }
+
+    function renderStream() {
+      const el = document.getElementById('blockStream');
+      el.innerHTML = beats.map((b, i) => {
+        const sel = i === activeIdx ? 'selected' : '';
+        let head = `<span class="s-num">${String(i + 1).padStart(2, '0')}</span>`;
+        let body = '';
+        if (b.type === 'dialogue') {
+          const ch = DATA.characters[b.speaker];
+          head += `<span class="s-speaker">${ch.name}</span><span class="s-mood">${b.mood}</span><span class="s-right-meta">${b.voice ? '♪ ' + b.voice : ''}</span>`;
+          body = `<div class="s-body">「${b.text}」</div>`;
+        } else if (b.type === 'choice') {
+          head += `<span class="s-tag">玩家分支</span><span class="s-right-meta">选择前自动存档</span>`;
+          body = `
+            <div class="s-body">${b.prompt}</div>
+            <div class="s-choices">
+              ${b.choices.map(c => {
+                const ok = window.evaluateDemoChoice(c, vars);
+                return `
+                  <div class="s-choice-row ${ok ? '' : 'locked'}">
+                    <span>${c.label}</span>
+                    <span style="display:flex;align-items:center;gap:8px">
+                      ${c.condition ? `<span class="s-cond">${ok ? '已解锁' : c.condition.desc}</span>` : ''}
+                      <span style="font-size:11.5px;color:var(--ink-3)">→ ${c.target}</span>
+                    </span>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          `;
+        } else {
+          head += `<span class="s-tag">${b.typeLabel}</span><span class="s-right-meta">${b.note || ''}</span>`;
+          body = `<div class="s-body ${b.type === 'narration' ? '' : 'muted'}">${b.text}</div>`;
+        }
+        return `<div class="s-block ${sel}" data-idx="${i}"><div class="s-block-head">${head}</div>${body}</div>`;
+      }).join('');
+
+      el.querySelectorAll('.s-block').forEach(node => node.addEventListener('click', () => {
+        activeIdx = Number(node.dataset.idx);
+        chosenOption = null;
+        renderAll();
+      }));
+    }
+
+    function renderStage() {
+      const b = beats[activeIdx];
+      const box = document.getElementById('stageBox');
+      const svg = window.renderGuieStageSVG(b, vars, chosenOption);
+
+      let choicesHtml = '';
+      if (b.type === 'choice' && !chosenOption) {
+        choicesHtml = `
+          <div class="st-choices">
+            ${b.choices.map(c => {
+              const ok = window.evaluateDemoChoice(c, vars);
+              return `
+                <button class="st-btn ${ok ? '' : 'locked'}" data-cid="${c.id}">
+                  <span>${c.label}</span>
+                  <span style="font-size:10.5px;opacity:0.7">${ok ? '预览 ↗' : c.condition.desc}</span>
+                </button>
+              `;
+            }).join('')}
+          </div>
+        `;
+      }
+
+      let sp = '', col = '#8CE0C5', txt = b.text;
+      if (chosenOption) {
+        const ch = DATA.characters[chosenOption.replySpeaker];
+        sp = ch.name; col = ch.darkColor; txt = chosenOption.replyText;
+      } else if (b.type === 'dialogue') {
+        const ch = DATA.characters[b.speaker];
+        sp = ch.name; col = ch.darkColor;
+      } else if (b.type === 'choice') {
+        txt = b.prompt;
+      }
+
+      box.innerHTML = `
+        ${svg}
+        ${choicesHtml}
+        <div class="st-box">
+          ${sp ? `<div class="st-sp" style="color:${col}">${sp}</div>` : ''}
+          <div class="st-tx">${txt}</div>
+        </div>
+      `;
+
+      box.querySelectorAll('.st-btn:not(.locked)').forEach(btn => btn.addEventListener('click', () => {
+        chosenOption = b.choices.find(x => x.id === btn.dataset.cid);
+        renderStage();
+      }));
+
+      document.getElementById('stepBadge').textContent = `${String(activeIdx + 1).padStart(2, '0')} / 08`;
+      document.getElementById('tlDots').innerHTML = beats.map((_, i) => `
+        <div class="tl-seg ${i === activeIdx ? 'active' : (i < activeIdx ? 'done' : '')}" data-idx="${i}"></div>
+      `).join('');
+      document.querySelectorAll('#tlDots .tl-seg').forEach(s => s.addEventListener('click', () => {
+        activeIdx = Number(s.dataset.idx);
+        chosenOption = null;
+        renderAll();
+      }));
+    }
+
+    function renderVars() {
+      document.getElementById('affVal').textContent = vars.affection;
+      document.getElementById('keyToggle').classList.toggle('on', vars.rooftopKey);
+    }
+
+    function renderWelcome() {
+      document.getElementById('wGrid').innerHTML = DATA.project.recentProjects.map(p => `
+        <div class="w-card" onclick="setMode('workspace')">
+          <div class="w-cover" style="background:${p.accentBg}">
+            <span class="w-tag">${p.genre}</span>
+          </div>
+          <div class="w-info">
+            <div class="w-name">${p.title}</div>
+            <div class="w-meta">${p.scenes} 场景 · ${p.words} · ${p.edited}</div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function setMode(mode) {
+      document.getElementById('wsView').classList.toggle('hide', mode === 'welcome');
+      document.getElementById('welView').classList.toggle('show', mode === 'welcome');
+      document.querySelectorAll('#pillNav button').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+    }
+
+    function renderAll() { renderStream(); renderStage(); renderVars(); }
+
+    document.querySelectorAll('#pillNav button').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
+    document.getElementById('prevBtn').addEventListener('click', () => { activeIdx = Math.max(0, activeIdx - 1); chosenOption = null; renderAll(); });
+    document.getElementById('nextBtn').addEventListener('click', () => { activeIdx = Math.min(beats.length - 1, activeIdx + 1); chosenOption = null; renderAll(); });
+    document.getElementById('affMinus').addEventListener('click', () => { vars.affection = Math.max(0, vars.affection - 1); chosenOption = null; renderAll(); });
+    document.getElementById('affPlus').addEventListener('click', () => { vars.affection = Math.min(10, vars.affection + 1); chosenOption = null; renderAll(); });
+    document.getElementById('keyToggle').addEventListener('click', () => { vars.rooftopKey = !vars.rooftopKey; chosenOption = null; renderAll(); });
+
+    renderSidebar();
+    renderWelcome();
+    renderAll();
+  </script>
+</body>
+</html>

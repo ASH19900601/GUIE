@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GUIE · 方案 A：Claude 羊皮纸沙龙</title>
+  <style>
+    :root {
+      --bg-canvas: #FAF9F5;
+      --bg-sidebar: #F4F3EE;
+      --bg-surface: #FFFFFF;
+      --bg-hover: #EFECE4;
+      --bg-subtle: #F0EEE6;
+      --ink-1: #141413;
+      --ink-2: #52514D;
+      --ink-3: #87867F;
+      --border: #E8E6DC;
+      --border-strong: #D9D6CA;
+      --accent: #C96442;
+      --accent-hover: #B55434;
+      --accent-soft: rgba(201, 100, 66, 0.10);
+      --sage: #677E52;
+      --sage-soft: rgba(103, 126, 82, 0.12);
+      --slate: #5A7D9A;
+      --font-serif: Georgia, "Noto Serif SC", "STSong", serif;
+      --font-sans: "Segoe UI Variable Text", "Segoe UI", "Noto Sans SC", "Microsoft YaHei UI", sans-serif;
+      --font-mono: "Cascadia Code", Consolas, monospace;
+      --ring: 0 0 0 1px rgba(20, 20, 19, 0.08);
+      --shadow-float: 0 0 0 1px rgba(20, 20, 19, 0.07), 0 8px 28px rgba(20, 20, 19, 0.055);
+      --shadow-card: 0 0 0 1px rgba(20, 20, 19, 0.08), 0 2px 10px rgba(20, 20, 19, 0.03);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; background: var(--bg-canvas); color: var(--ink-1); font-family: var(--font-sans); font-size: 13.5px; -webkit-font-smoothing: antialiased; overflow: hidden; }
+    button { font-family: inherit; border: none; background: none; color: inherit; cursor: pointer; }
+    input, textarea { font-family: inherit; color: inherit; }
+
+    /* Shell */
+    .app { display: flex; height: 100vh; width: 100vw; }
+
+    /* Slim Warm Linen Sidebar (Unified Nav + Outline — no 4-column squeeze) */
+    .sidebar {
+      width: 248px;
+      flex-shrink: 0;
+      background: var(--bg-sidebar);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      padding: 16px 12px 14px;
+      user-select: none;
+    }
+
+    .brand-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 2px 8px 14px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      font-family: var(--font-serif);
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      color: var(--ink-1);
+    }
+    .brand-spark {
+      width: 22px;
+      height: 22px;
+      border-radius: 6px;
+      background: var(--accent);
+      display: grid;
+      place-items: center;
+      color: #FAF9F5;
+      font-size: 12px;
+    }
+    .icon-btn {
+      width: 28px; height: 28px; border-radius: 7px;
+      display: grid; place-items: center; color: var(--ink-3);
+      transition: background 140ms, color 140ms;
+    }
+    .icon-btn:hover { background: var(--bg-hover); color: var(--ink-1); }
+
+    /* Primary module links — super quiet, no loud boxes */
+    .nav-group { display: flex; flex-direction: column; gap: 2px; margin-bottom: 16px; }
+    .nav-item {
+      display: flex; align-items: center; gap: 9px;
+      padding: 7px 10px; border-radius: 8px;
+      font-size: 13px; color: var(--ink-2);
+      transition: background 140ms, color 140ms;
+    }
+    .nav-item:hover { background: var(--bg-hover); color: var(--ink-1); }
+    .nav-item.active { background: #EAE7DF; color: var(--ink-1); font-weight: 500; }
+    .nav-item svg { width: 15px; height: 15px; opacity: 0.72; flex-shrink: 0; }
+    .nav-item.active svg { opacity: 1; color: var(--accent); }
+
+    .divider { height: 1px; background: var(--border); margin: 4px 8px 14px; }
+
+    /* Chapter & Scene Outline inside sidebar */
+    .outline-label {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 10px 8px;
+      font-size: 11px; letter-spacing: 0.04em; color: var(--ink-3);
+      font-weight: 500;
+    }
+    .outline-scroll { flex: 1; overflow-y: auto; padding-right: 2px; }
+    .chapter-title {
+      padding: 10px 10px 4px;
+      font-size: 11.5px; color: var(--ink-3); font-weight: 500;
+    }
+    .scene-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 6.5px 10px; border-radius: 8px;
+      font-size: 13px; color: var(--ink-2);
+      margin-bottom: 1px; transition: background 140ms;
+    }
+    .scene-row:hover { background: var(--bg-hover); color: var(--ink-1); }
+    .scene-row.active {
+      background: var(--bg-surface);
+      color: var(--ink-1);
+      font-weight: 500;
+      box-shadow: var(--ring);
+    }
+    .scene-row.muted { opacity: 0.55; }
+    .scene-meta { font-size: 11px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+    .scene-dot {
+      width: 5px; height: 5px; border-radius: 50%; background: var(--accent);
+      display: inline-block; margin-right: 7px; vertical-align: middle;
+    }
+
+    /* Sidebar footer */
+    .sidebar-foot {
+      padding-top: 10px; border-top: 1px solid var(--border);
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .ai-pill {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 10px; border-radius: 9px;
+      background: var(--bg-surface); box-shadow: var(--ring);
+      font-size: 12.5px; color: var(--ink-1);
+      transition: transform 140ms, box-shadow 140ms;
+    }
+    .ai-pill:hover { box-shadow: 0 0 0 1px rgba(201,100,66,0.35); }
+    .ai-pill-left { display: flex; align-items: center; gap: 8px; }
+    .ai-kbd { font-size: 11px; color: var(--ink-3); font-family: var(--font-mono); }
+    .foot-links { display: flex; justify-content: space-between; padding: 6px 8px 0; font-size: 12px; color: var(--ink-3); }
+    .foot-links button:hover { color: var(--ink-1); }
+
+    /* Main Right Area */
+    .workspace { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+
+    /* Whisper-Quiet Top Bar (no stacked toolbars, no noisy green pills) */
+    .topbar {
+      height: 50px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 24px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(250, 249, 245, 0.85);
+      backdrop-filter: blur(8px);
+    }
+    .crumb { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-3); }
+    .crumb strong { color: var(--ink-1); font-weight: 500; }
+    .save-dot {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 11.5px; color: var(--ink-3); margin-left: 10px;
+    }
+    .save-dot::before {
+      content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--sage);
+    }
+
+    /* Segmented View Switcher (subtle, zero hard borders) */
+    .seg {
+      display: inline-flex; padding: 3px; border-radius: 9px;
+      background: var(--bg-subtle); gap: 2px;
+    }
+    .seg button {
+      padding: 4px 12px; border-radius: 6.5px; font-size: 12.5px; color: var(--ink-2);
+      transition: all 140ms;
+    }
+    .seg button.active {
+      background: var(--bg-surface); color: var(--ink-1); font-weight: 500;
+      box-shadow: 0 1px 2px rgba(20,20,19,0.06);
+    }
+
+    .top-actions { display: flex; align-items: center; gap: 8px; }
+    .btn-ghost {
+      padding: 6px 11px; border-radius: 8px; font-size: 12.5px; color: var(--ink-2);
+      transition: background 140ms, color 140ms;
+    }
+    .btn-ghost:hover { background: var(--bg-hover); color: var(--ink-1); }
+    .btn-primary {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 14px; border-radius: 8px;
+      background: var(--accent); color: #FAF9F5;
+      font-size: 12.5px; font-weight: 500;
+      transition: background 140ms;
+    }
+    .btn-primary:hover { background: var(--accent-hover); }
+
+    /* Workbench Split: Manuscript + Quiet Stage Pane */
+    .workbench { flex: 1; display: flex; min-height: 0; }
+
+    /* Center Literary Manuscript Column — ZERO boxy card-in-card soup */
+    .manuscript-wrap {
+      flex: 1; position: relative; display: flex; flex-direction: column;
+      min-width: 0; background: var(--bg-canvas);
+    }
+    .manuscript-scroll {
+      flex: 1; overflow-y: auto;
+      padding: 36px 40px 148px;
+    }
+    .manuscript { max-width: 660px; margin: 0 auto; }
+
+    .scene-header {
+      margin-bottom: 28px; padding-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    .scene-eyebrow {
+      font-size: 11.5px; letter-spacing: 0.06em; color: var(--ink-3);
+      margin-bottom: 8px; display: flex; align-items: center; gap: 10px;
+    }
+    .scene-h1 {
+      font-family: var(--font-serif);
+      font-size: 27px; font-weight: 500; letter-spacing: -0.015em;
+      color: var(--ink-1); line-height: 1.25;
+    }
+
+    /* Story Beats — Organic Editorial Flow */
+    .beat-list { display: flex; flex-direction: column; gap: 6px; }
+
+    .beat {
+      position: relative;
+      padding: 13px 18px 13px 20px;
+      border-radius: 12px;
+      transition: background 160ms, box-shadow 160ms;
+      cursor: pointer;
+    }
+    .beat:hover { background: rgba(240, 238, 230, 0.72); }
+    .beat.selected {
+      background: var(--bg-surface);
+      box-shadow: var(--shadow-card);
+    }
+    .beat.selected::before {
+      content: ""; position: absolute; left: 0; top: 14px; bottom: 14px;
+      width: 2.5px; border-radius: 2px; background: var(--accent);
+    }
+
+    .beat-num {
+      position: absolute; left: -30px; top: 16px;
+      font-size: 11px; color: var(--ink-3); opacity: 0.55;
+      font-variant-numeric: tabular-nums;
+      transition: opacity 150ms;
+    }
+    .beat:hover .beat-num, .beat.selected .beat-num { opacity: 1; color: var(--accent); }
+
+    /* Stage direction beats (background / audio / sprite / state) — quiet screenplay cues */
+    .beat-cue {
+      display: flex; align-items: baseline; gap: 10px;
+      font-size: 13px; color: var(--ink-2);
+    }
+    .cue-tag {
+      font-size: 11px; padding: 2px 7px; border-radius: 5px;
+      background: var(--bg-subtle); color: var(--ink-2);
+      flex-shrink: 0; font-weight: 500;
+    }
+    .beat.selected .cue-tag { background: var(--accent-soft); color: var(--accent); }
+    .cue-note { margin-left: auto; font-size: 11.5px; color: var(--ink-3); flex-shrink: 0; }
+
+    /* Narration — pure serif prose */
+    .beat-narration {
+      font-family: var(--font-serif);
+      font-size: 15.5px; line-height: 1.85; color: var(--ink-2);
+    }
+
+    /* Dialogue — character heading + warm serif speech */
+    .beat-speaker-row {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 5px;
+    }
+    .speaker-name { font-size: 13px; font-weight: 600; color: var(--ink-1); }
+    .speaker-dot { width: 7px; height: 7px; border-radius: 50%; }
+    .micro-chip {
+      font-size: 11.5px; color: var(--ink-3);
+      padding: 1px 7px; border-radius: 99px;
+      background: transparent; transition: background 140ms;
+    }
+    .beat.selected .micro-chip { background: var(--bg-subtle); color: var(--ink-2); }
+    .beat-dialogue-text {
+      font-family: var(--font-serif);
+      font-size: 16px; line-height: 1.8; color: var(--ink-1);
+    }
+
+    /* Branch Choice Block — clean list, no nested bordered boxes */
+    .choice-prompt {
+      font-family: var(--font-serif); font-size: 14.5px; color: var(--ink-2);
+      margin-bottom: 10px;
+    }
+    .choice-rows { display: flex; flex-direction: column; gap: 6px; }
+    .choice-line {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 12px; border-radius: 9px;
+      background: var(--bg-sidebar); font-size: 13px; color: var(--ink-1);
+      transition: background 140ms;
+    }
+    .beat.selected .choice-line { background: var(--bg-canvas); box-shadow: var(--ring); }
+    .choice-line:hover { background: var(--bg-hover); }
+    .choice-target { font-size: 11.5px; color: var(--ink-3); display: flex; align-items: center; gap: 8px; }
+    .choice-cond { font-size: 11px; color: var(--accent); background: var(--accent-soft); padding: 1px 6px; border-radius: 4px; }
+
+    /* Claude-inspired Floating Bottom Composer */
+    .composer-dock {
+      position: absolute; left: 0; right: 0; bottom: 0;
+      padding: 16px 40px 22px;
+      background: linear-gradient(to top, var(--bg-canvas) 62%, rgba(250,249,245,0));
+      pointer-events: none;
+    }
+    .composer {
+      max-width: 660px; margin: 0 auto;
+      background: var(--bg-surface);
+      border-radius: 16px;
+      box-shadow: var(--shadow-float);
+      padding: 12px 14px 10px;
+      pointer-events: auto;
+    }
+    .composer input {
+      width: 100%; border: none; outline: none; background: transparent;
+      font-family: var(--font-serif); font-size: 15px; color: var(--ink-1);
+      padding: 2px 4px 10px;
+    }
+    .composer input::placeholder { color: var(--ink-3); font-family: var(--font-sans); font-size: 13.5px; }
+    .composer-bar { display: flex; align-items: center; justify-content: space-between; }
+    .composer-tools { display: flex; align-items: center; gap: 4px; }
+    .tool-chip {
+      padding: 4px 9px; border-radius: 7px; font-size: 12px; color: var(--ink-2);
+      transition: background 140ms;
+    }
+    .tool-chip:hover { background: var(--bg-subtle); color: var(--ink-1); }
+    .send-circle {
+      width: 30px; height: 30px; border-radius: 9px;
+      background: var(--accent); color: #FAF9F5;
+      display: grid; place-items: center; font-size: 14px;
+      transition: background 140ms;
+    }
+    .send-circle:hover { background: var(--accent-hover); }
+
+    /* Right Quiet Stage & Timeline Inspector */
+    .inspector {
+      width: 400px; flex-shrink: 0;
+      background: var(--bg-sidebar);
+      border-left: 1px solid var(--border);
+      padding: 18px 20px;
+      display: flex; flex-direction: column; gap: 18px;
+      overflow-y: auto;
+    }
+    .insp-head { display: flex; align-items: center; justify-content: space-between; }
+    .insp-title { font-size: 12px; font-weight: 500; color: var(--ink-2); }
+    .step-counter { font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+
+    /* 16:9 Live Visual Novel Stage */
+    .stage-box {
+      position: relative; width: 100%; aspect-ratio: 16 / 9;
+      border-radius: 11px; overflow: hidden;
+      background: #1C1A19;
+      box-shadow: 0 0 0 1px rgba(20,20,19,0.10), 0 10px 24px rgba(20,20,19,0.08);
+    }
+    .stage-overlay-choices {
+      position: absolute; inset: 12px 24px 66px;
+      display: flex; flex-direction: column; justify-content: center; gap: 7px;
+      z-index: 4;
+    }
+    .stage-choice-btn {
+      padding: 7px 12px; border-radius: 8px;
+      background: rgba(20, 20, 19, 0.78); backdrop-filter: blur(8px);
+      border: 1px solid rgba(250, 249, 245, 0.18);
+      color: #FAF9F5; font-size: 12px; text-align: left;
+      display: flex; align-items: center; justify-content: space-between;
+      transition: all 140ms;
+    }
+    .stage-choice-btn:hover:not(.locked) { background: rgba(201, 100, 66, 0.90); border-color: rgba(255,255,255,0.32); }
+    .stage-choice-btn.locked { opacity: 0.45; cursor: not-allowed; }
+    .stage-dialogue {
+      position: absolute; left: 10px; right: 10px; bottom: 10px;
+      background: rgba(20, 19, 18, 0.80); backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      border-radius: 9px; padding: 9px 12px; color: #FAF9F5;
+      z-index: 3;
+    }
+    .stage-speaker { font-size: 11.5px; font-weight: 600; margin-bottom: 3px; }
+    .stage-text { font-family: var(--font-serif); font-size: 12px; line-height: 1.55; color: rgba(250,249,245,0.92); }
+
+    /* Minimalist Timeline Scrubber */
+    .scrubber { display: flex; align-items: center; gap: 10px; }
+    .scrub-btn {
+      width: 26px; height: 26px; border-radius: 7px;
+      display: grid; place-items: center; color: var(--ink-2);
+      background: var(--bg-surface); box-shadow: var(--ring);
+      font-size: 11px;
+    }
+    .scrub-btn:hover { color: var(--ink-1); }
+    .scrub-track {
+      flex: 1; position: relative; height: 24px;
+      display: flex; align-items: center; cursor: pointer;
+    }
+    .scrub-rail { width: 100%; height: 3px; border-radius: 99px; background: #DFDDD3; position: relative; }
+    .scrub-fill { height: 100%; border-radius: 99px; background: var(--accent); transition: width 160ms; }
+    .scrub-thumb {
+      position: absolute; top: 50%; transform: translate(-50%, -50%);
+      width: 12px; height: 12px; border-radius: 50%;
+      background: var(--bg-surface); border: 2.5px solid var(--accent);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.16); transition: left 160ms;
+    }
+
+    /* Story Variables — Clean Hairline Rows, zero nested cards */
+    .section-cap {
+      font-size: 11px; letter-spacing: 0.04em; color: var(--ink-3);
+      margin-bottom: 6px; font-weight: 500;
+    }
+    .var-list {
+      background: var(--bg-surface); border-radius: 11px;
+      box-shadow: var(--ring); overflow: hidden;
+    }
+    .var-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 13px; border-bottom: 1px solid var(--border);
+    }
+    .var-row:last-child { border-bottom: none; }
+    .var-name { font-size: 13px; color: var(--ink-1); }
+    .var-sub { font-size: 11px; color: var(--ink-3); margin-top: 1px; }
+    .stepper { display: inline-flex; align-items: center; gap: 8px; }
+    .stepper button {
+      width: 24px; height: 24px; border-radius: 6px;
+      background: var(--bg-subtle); color: var(--ink-1); font-size: 13px;
+    }
+    .stepper button:hover { background: var(--bg-hover); }
+    .stepper span { min-width: 18px; text-align: center; font-variant-numeric: tabular-nums; font-weight: 500; }
+    .toggle-pill {
+      padding: 4px 10px; border-radius: 99px; font-size: 11.5px; font-weight: 500;
+      background: var(--bg-subtle); color: var(--ink-2); transition: all 140ms;
+    }
+    .toggle-pill.on { background: var(--sage-soft); color: var(--sage); }
+
+    .hint-note {
+      font-size: 12px; line-height: 1.6; color: var(--ink-3);
+      padding: 2px 2px;
+    }
+
+    /* ========== WELCOME HOME VIEW (Claude Editorial Salon) ========== */
+    .welcome-view {
+      display: none; flex: 1; overflow-y: auto;
+      background: var(--bg-canvas);
+      padding: 72px 32px 60px;
+    }
+    .welcome-view.show { display: block; }
+    .workbench.hide { display: none; }
+
+    .welcome-inner { max-width: 680px; margin: 0 auto; }
+    .welcome-emblem {
+      width: 34px; height: 34px; border-radius: 10px;
+      background: var(--accent-soft); color: var(--accent);
+      display: grid; place-items: center; margin-bottom: 18px; font-size: 17px;
+    }
+    .welcome-h1 {
+      font-family: var(--font-serif); font-size: 34px; font-weight: 400;
+      letter-spacing: -0.02em; color: var(--ink-1); margin-bottom: 10px;
+    }
+    .welcome-sub { font-size: 14.5px; color: var(--ink-2); line-height: 1.65; margin-bottom: 28px; }
+    .welcome-actions { display: flex; align-items: center; gap: 10px; margin-bottom: 44px; }
+    .btn-outline {
+      padding: 8px 16px; border-radius: 9px; font-size: 13px; color: var(--ink-1);
+      background: var(--bg-surface); box-shadow: var(--ring);
+      transition: background 140ms;
+    }
+    .btn-outline:hover { background: var(--bg-subtle); }
+
+    .proj-list-head {
+      display: flex; justify-content: space-between; font-size: 11.5px;
+      color: var(--ink-3); letter-spacing: 0.04em; padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    .proj-row {
+      display: flex; align-items: center; gap: 16px;
+      padding: 16px 10px; border-bottom: 1px solid var(--border);
+      cursor: pointer; border-radius: 10px; margin: 2px -10px;
+      transition: background 140ms;
+    }
+    .proj-row:hover { background: var(--bg-sidebar); }
+    .book-spine { width: 4px; height: 36px; border-radius: 99px; flex-shrink: 0; }
+    .proj-title { font-family: var(--font-serif); font-size: 16.5px; color: var(--ink-1); margin-bottom: 3px; }
+    .proj-meta { font-size: 12px; color: var(--ink-3); }
+    .proj-time { margin-left: auto; font-size: 12px; color: var(--ink-3); }
+
+    /* Custom subtle scrollbar */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(20,20,19,0.12); border-radius: 99px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(20,20,19,0.22); }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <!-- Left Warm Linen Sidebar -->
+    <aside class="sidebar">
+      <div class="brand-row">
+        <div class="brand">
+          <span class="brand-spark">✦</span>
+          <span>GUIE</span>
+        </div>
+        <button class="icon-btn" title="切换首页 / 工作台" id="homeToggleBtn">⌂</button>
+      </div>
+
+      <nav class="nav-group">
+        <button class="nav-item active" data-view="workbench">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+          故事手稿
+        </button>
+        <button class="nav-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          角色与状态
+        </button>
+        <button class="nav-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+          素材库
+        </button>
+        <button class="nav-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18"/></svg>
+          外观与扩展
+        </button>
+      </nav>
+
+      <div class="divider"></div>
+
+      <div class="outline-label">
+        <span>樱庭微风 · 章节目录</span>
+        <span>+</span>
+      </div>
+      <div class="outline-scroll" id="outlineTree"></div>
+
+      <div class="sidebar-foot">
+        <button class="ai-pill" onclick="document.getElementById('composerInput').focus()">
+          <span class="ai-pill-left"><span style="color:var(--accent)">✦</span> 创作助手</span>
+          <span class="ai-kbd">⌘J</span>
+        </button>
+        <div class="foot-links">
+          <button id="switchToWelcome">返回书架</button>
+          <button>高级源码</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Right Shell -->
+    <div class="workspace">
+      <header class="topbar">
+        <div class="crumb">
+          <span>序章</span>
+          <span>/</span>
+          <strong>黄昏教室的邀请</strong>
+          <span class="save-dot">已自动保存</span>
+        </div>
+
+        <div class="seg" id="viewModeSeg">
+          <button class="active" data-mode="workbench">手稿</button>
+          <button data-mode="welcome">欢迎首页</button>
+        </div>
+
+        <div class="top-actions">
+          <button class="btn-ghost">历史版本</button>
+          <button class="btn-ghost">发布导出</button>
+          <button class="btn-primary">▶ 试玩本场</button>
+        </div>
+      </header>
+
+      <!-- Workbench View -->
+      <main class="workbench" id="workbenchView">
+        <section class="manuscript-wrap">
+          <div class="manuscript-scroll">
+            <div class="manuscript">
+              <div class="scene-header">
+                <div class="scene-eyebrow">
+                  <span>序章 · 第一幕</span>
+                  <span>·</span>
+                  <span>8 节剧情</span>
+                  <span>·</span>
+                  <span>1920 × 1080</span>
+                </div>
+                <h1 class="scene-h1">黄昏教室的邀请</h1>
+              </div>
+
+              <div class="beat-list" id="beatList"></div>
+            </div>
+          </div>
+
+          <!-- Floating Claude-style Bottom Composer -->
+          <div class="composer-dock">
+            <div class="composer">
+              <input id="composerInput" type="text" placeholder="写下一句对白按回车追加，或输入 / 插入背景、立绘、分支…" />
+              <div class="composer-bar">
+                <div class="composer-tools">
+                  <button class="tool-chip" id="cycleSpeakerBtn">林夏 · 微笑</button>
+                  <button class="tool-chip">+ 舞台指令</button>
+                  <button class="tool-chip">语音转写</button>
+                </div>
+                <button class="send-circle" id="appendBeatBtn" title="追加对白">↑</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Right Quiet Stage Preview & Variables -->
+        <aside class="inspector">
+          <div class="insp-head">
+            <span class="insp-title">即时舞台预览</span>
+            <span class="step-counter" id="stepCounter">05 / 08</span>
+          </div>
+
+          <div class="stage-box" id="stageBox"></div>
+
+          <div class="scrubber">
+            <button class="scrub-btn" id="prevBtn" title="上一节">‹</button>
+            <div class="scrub-track" id="scrubTrack">
+              <div class="scrub-rail">
+                <div class="scrub-fill" id="scrubFill"></div>
+                <div class="scrub-thumb" id="scrubThumb"></div>
+              </div>
+            </div>
+            <button class="scrub-btn" id="nextBtn" title="下一节">›</button>
+          </div>
+
+          <div>
+            <div class="section-cap">故事状态（实时影响分支解锁）</div>
+            <div class="var-list">
+              <div class="var-row">
+                <div>
+                  <div class="var-name">林夏好感度</div>
+                  <div class="var-sub">跨周目持久 · 隐藏分支阈值 ≥ 3</div>
+                </div>
+                <div class="stepper">
+                  <button id="affMinus">−</button>
+                  <span id="affVal">2</span>
+                  <button id="affPlus">+</button>
+                </div>
+              </div>
+              <div class="var-row">
+                <div>
+                  <div class="var-name">天台钥匙</div>
+                  <div class="var-sub">开关 · 决定能否前往秘密天台</div>
+                </div>
+                <button class="toggle-pill on" id="keyToggle">已持有</button>
+              </div>
+              <div class="var-row">
+                <div>
+                  <div class="var-name">所属社团</div>
+                  <div class="var-sub">文本变量</div>
+                </div>
+                <span style="font-size:12.5px;color:var(--ink-2)">天文社</span>
+              </div>
+            </div>
+          </div>
+
+          <p class="hint-note" id="beatHint">点击左侧任意剧情行、拖动上方时间轴，或直接点击第 8 节画面中的分支选项，实时测试好感度解锁效果。</p>
+        </aside>
+      </main>
+
+      <!-- Welcome Home View (Claude Editorial Salon) -->
+      <section class="welcome-view" id="welcomeView">
+        <div class="welcome-inner">
+          <div class="welcome-emblem">✦</div>
+          <h1 class="welcome-h1">下午好，继续写你的故事。</h1>
+          <p class="welcome-sub">像整理一部短篇小说那样编排对白、立绘与分支。运行引擎、多语种字体与离线语音转写均已就绪，无需任何环境配置。</p>
+          <div class="welcome-actions">
+            <button class="btn-primary" style="padding:9px 18px;font-size:13.5px" id="openNewWork">＋ 新建作品</button>
+            <button class="btn-outline" id="resumeDemoWork">打开现有工程…</button>
+          </div>
+
+          <div class="proj-list-head">
+            <span>最近编辑的作品</span>
+            <span>3 部工程</span>
+          </div>
+          <div id="recentList"></div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script src="shared/story-data.js"></script>
+  <script>
+    const DATA = window.GUIE_DEMO_DATA;
+    const beats = DATA.beats.map(b => ({ ...b }));
+    let activeIdx = 4; // Start on Lin Xia's expressive dialogue beat
+    const vars = { ...DATA.initialVars };
+    let chosenOption = null;
+    let draftSpeaker = 'linxia';
+
+    function renderOutline() {
+      const el = document.getElementById('outlineTree');
+      el.innerHTML = DATA.project.chapters.map(ch => `
+        <div class="chapter-title">${ch.title}</div>
+        ${ch.scenes.map(sc => `
+          <div class="scene-row ${sc.active ? 'active' : ''} ${sc.muted ? 'muted' : ''}">
+            <span>${sc.active ? '<span class="scene-dot"></span>' : ''}${sc.title}</span>
+            <span class="scene-meta">${sc.tag || sc.beats}</span>
+          </div>
+        `).join('')}
+      `).join('');
+    }
+
+    function renderBeats() {
+      const el = document.getElementById('beatList');
+      el.innerHTML = beats.map((b, i) => {
+        const sel = i === activeIdx ? 'selected' : '';
+        let inner = '';
+        if (b.type === 'narration') {
+          inner = `<div class="beat-narration">${b.text}</div>`;
+        } else if (b.type === 'dialogue') {
+          const ch = DATA.characters[b.speaker];
+          inner = `
+            <div class="beat-speaker-row">
+              <span class="speaker-dot" style="background:${ch.color}"></span>
+              <span class="speaker-name">${ch.name}</span>
+              <span class="micro-chip">${b.mood}</span>
+              ${b.voice ? `<span class="micro-chip">♪ ${b.voice}</span>` : ''}
+            </div>
+            <div class="beat-dialogue-text">「${b.text}」</div>
+          `;
+        } else if (b.type === 'choice') {
+          inner = `
+            <div class="choice-prompt">${b.prompt}</div>
+            <div class="choice-rows">
+              ${b.choices.map(c => {
+                const ok = window.evaluateDemoChoice(c, vars);
+                return `
+                  <div class="choice-line" style="${ok ? '' : 'opacity:0.55'}">
+                    <span>${c.label}</span>
+                    <span class="choice-target">
+                      ${c.condition ? `<span class="choice-cond">${ok ? '已满足' : c.condition.desc}</span>` : ''}
+                      <span>→ ${c.target}</span>
+                    </span>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          `;
+        } else {
+          inner = `
+            <div class="beat-cue">
+              <span class="cue-tag">${b.typeLabel}</span>
+              <span>${b.text}</span>
+              <span class="cue-note">${b.note || ''}</span>
+            </div>
+          `;
+        }
+        return `
+          <div class="beat ${sel}" data-idx="${i}">
+            <span class="beat-num">${String(i + 1).padStart(2, '0')}</span>
+            ${inner}
+          </div>
+        `;
+      }).join('');
+
+      el.querySelectorAll('.beat').forEach(node => {
+        node.addEventListener('click', () => {
+          activeIdx = Number(node.dataset.idx);
+          chosenOption = null;
+          renderAll();
+        });
+      });
+    }
+
+    function renderStage() {
+      const b = beats[activeIdx];
+      const box = document.getElementById('stageBox');
+      const svg = window.renderGuieStageSVG(b, vars, chosenOption);
+
+      let choicesHtml = '';
+      if (b.type === 'choice' && !chosenOption) {
+        choicesHtml = `
+          <div class="stage-overlay-choices">
+            ${b.choices.map(c => {
+              const ok = window.evaluateDemoChoice(c, vars);
+              return `
+                <button class="stage-choice-btn ${ok ? '' : 'locked'}" data-cid="${c.id}">
+                  <span>${c.label}</span>
+                  <span style="font-size:10.5px;opacity:0.75">${ok ? '点击试看 ↗' : c.condition.desc}</span>
+                </button>
+              `;
+            }).join('')}
+          </div>
+        `;
+      }
+
+      let spName = '';
+      let spColor = '#F4DFC8';
+      let lineText = b.text;
+      if (chosenOption) {
+        const ch = DATA.characters[chosenOption.replySpeaker];
+        spName = ch.name;
+        spColor = ch.darkColor;
+        lineText = chosenOption.replyText;
+      } else if (b.type === 'dialogue') {
+        const ch = DATA.characters[b.speaker];
+        spName = ch.name;
+        spColor = ch.darkColor;
+      } else if (b.type === 'choice') {
+        lineText = b.prompt;
+      }
+
+      box.innerHTML = `
+        ${svg}
+        ${choicesHtml}
+        <div class="stage-dialogue">
+          ${spName ? `<div class="stage-speaker" style="color:${spColor}">${spName}</div>` : ''}
+          <div class="stage-text">${lineText}</div>
+        </div>
+      `;
+
+      box.querySelectorAll('.stage-choice-btn:not(.locked)').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          chosenOption = b.choices.find(x => x.id === btn.dataset.cid);
+          renderStage();
+        });
+      });
+
+      document.getElementById('stepCounter').textContent =
+        `${String(activeIdx + 1).padStart(2, '0')} / ${String(beats.length).padStart(2, '0')}`;
+      const pct = beats.length > 1 ? (activeIdx / (beats.length - 1)) * 100 : 100;
+      document.getElementById('scrubFill').style.width = pct + '%';
+      document.getElementById('scrubThumb').style.left = pct + '%';
+      document.getElementById('beatHint').textContent =
+        chosenOption
+          ? `已预览分支路线「${chosenOption.target}」。再次点击第 8 节可重置选择，或调整好感度解锁隐藏选项。`
+          : `当前定位：第 ${activeIdx + 1} 节 · ${b.typeLabel}（${b.note || b.bgName}）。点击第 8 节可直接试玩分支。`;
+    }
+
+    function renderVars() {
+      document.getElementById('affVal').textContent = vars.affection;
+      const kt = document.getElementById('keyToggle');
+      kt.textContent = vars.rooftopKey ? '已持有' : '未获得';
+      kt.classList.toggle('on', vars.rooftopKey);
+    }
+
+    function renderWelcome() {
+      document.getElementById('recentList').innerHTML = DATA.project.recentProjects.map(p => `
+        <div class="proj-row" onclick="setMode('workbench')">
+          <span class="book-spine" style="background:${p.palette[0]}"></span>
+          <div>
+            <div class="proj-title">${p.title}</div>
+            <div class="proj-meta">${p.genre} · ${p.scenes} 场景 · ${p.characters} 角色 · ${p.words}</div>
+          </div>
+          <span class="proj-time">${p.edited}</span>
+        </div>
+      `).join('');
+    }
+
+    function setMode(mode) {
+      document.getElementById('workbenchView').classList.toggle('hide', mode === 'welcome');
+      document.getElementById('welcomeView').classList.toggle('show', mode === 'welcome');
+      document.querySelectorAll('#viewModeSeg button').forEach(b => {
+        b.classList.toggle('active', b.dataset.mode === mode);
+      });
+    }
+
+    function renderAll() {
+      renderBeats();
+      renderStage();
+      renderVars();
+    }
+
+    // Interactions
+    document.querySelectorAll('#viewModeSeg button').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
+    document.getElementById('homeToggleBtn').addEventListener('click', () => {
+      const isWel = document.getElementById('welcomeView').classList.contains('show');
+      setMode(isWel ? 'workbench' : 'welcome');
+    });
+    document.getElementById('switchToWelcome').addEventListener('click', () => setMode('welcome'));
+    document.getElementById('openNewWork').addEventListener('click', () => setMode('workbench'));
+    document.getElementById('resumeDemoWork').addEventListener('click', () => setMode('workbench'));
+
+    document.getElementById('prevBtn').addEventListener('click', () => { activeIdx = Math.max(0, activeIdx - 1); chosenOption = null; renderAll(); });
+    document.getElementById('nextBtn').addEventListener('click', () => { activeIdx = Math.min(beats.length - 1, activeIdx + 1); chosenOption = null; renderAll(); });
+    document.getElementById('scrubTrack').addEventListener('click', (e) => {
+      const r = e.currentTarget.getBoundingClientRect();
+      const ratio = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+      activeIdx = Math.round(ratio * (beats.length - 1));
+      chosenOption = null;
+      renderAll();
+    });
+
+    document.getElementById('affMinus').addEventListener('click', () => { vars.affection = Math.max(0, vars.affection - 1); chosenOption = null; renderAll(); });
+    document.getElementById('affPlus').addEventListener('click', () => { vars.affection = Math.min(10, vars.affection + 1); chosenOption = null; renderAll(); });
+    document.getElementById('keyToggle').addEventListener('click', () => { vars.rooftopKey = !vars.rooftopKey; chosenOption = null; renderAll(); });
+
+    document.getElementById('cycleSpeakerBtn').addEventListener('click', (e) => {
+      draftSpeaker = draftSpeaker === 'linxia' ? 'shenqiu' : 'linxia';
+      e.target.textContent = draftSpeaker === 'linxia' ? '林夏 · 微笑' : '沈秋 · 温柔';
+    });
+
+    function appendDraft() {
+      const inp = document.getElementById('composerInput');
+      const txt = inp.value.trim();
+      if (!txt) return;
+      beats.push({
+        id: beats.length + 1,
+        type: 'dialogue',
+        typeLabel: '对白',
+        bg: 'classroom_dusk',
+        bgName: '黄昏教室 · 橘色晚霞',
+        sprites: [
+          { id: 'linxia', pos: 'left', mood: '微笑', active: draftSpeaker === 'linxia' },
+          { id: 'shenqiu', pos: 'right', mood: '温柔', active: draftSpeaker === 'shenqiu' },
+        ],
+        speaker: draftSpeaker,
+        mood: draftSpeaker === 'linxia' ? '微笑' : '温柔',
+        text: txt,
+        note: '刚刚录入',
+      });
+      inp.value = '';
+      activeIdx = beats.length - 1;
+      chosenOption = null;
+      renderAll();
+    }
+    document.getElementById('appendBeatBtn').addEventListener('click', appendDraft);
+    document.getElementById('composerInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') appendDraft(); });
+
+    renderOutline();
+    renderWelcome();
+    renderAll();
+  </script>
+</body>
+</html>

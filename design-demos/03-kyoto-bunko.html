@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GUIE · 方案 C：京都文库本 · 原稿纸</title>
+  <style>
+    :root {
+      --paper: #FBFBF7;
+      --margin: #F3F1E9;
+      --white: #FFFFFF;
+      --rule: #E2DED3;
+      --rule-light: #ECE9E0;
+      --ink: #1B1B19;
+      --ink-2: #595751;
+      --ink-3: #8D8A82;
+      --indigo: #25446B;
+      --indigo-soft: rgba(37, 68, 107, 0.08);
+      --seal: #B54233;
+      --seal-soft: rgba(181, 66, 51, 0.08);
+      --font-serif: "Noto Serif SC", "STSong", Georgia, serif;
+      --font-sans: "Segoe UI Variable Text", "Segoe UI", "Noto Sans SC", "Microsoft YaHei UI", sans-serif;
+      --font-mono: Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%; background: var(--paper); color: var(--ink);
+      font-family: var(--font-sans); font-size: 13px;
+      -webkit-font-smoothing: antialiased; overflow: hidden;
+    }
+    button { font-family: inherit; border: none; background: none; color: inherit; cursor: pointer; }
+
+    .app { display: flex; flex-direction: column; height: 100vh; width: 100vw; }
+
+    /* Architectural Book-Header Bar — zero puffy pills */
+    .masthead {
+      height: 52px; flex-shrink: 0;
+      background: var(--paper);
+      border-bottom: 1px solid var(--rule);
+      display: flex; align-items: stretch; justify-content: space-between;
+      padding: 0 24px;
+      user-select: none;
+    }
+    .mh-left { display: flex; align-items: center; gap: 14px; }
+    .hanko {
+      width: 24px; height: 24px;
+      border: 1.5px solid var(--seal); color: var(--seal);
+      font-family: var(--font-serif); font-size: 12px; font-weight: 700;
+      display: grid; place-items: center; border-radius: 2px;
+    }
+    .work-title {
+      font-family: var(--font-serif); font-size: 16px; font-weight: 600;
+      letter-spacing: 0.04em;
+    }
+    .work-sub { font-size: 11.5px; color: var(--ink-3); padding-left: 12px; border-left: 1px solid var(--rule); }
+
+    /* Underlined editorial tabs */
+    .tabs { display: flex; align-items: stretch; gap: 24px; }
+    .tabs button {
+      position: relative; font-size: 13px; color: var(--ink-3);
+      letter-spacing: 0.05em; padding: 0 2px; transition: color 140ms;
+    }
+    .tabs button:hover { color: var(--ink); }
+    .tabs button.active { color: var(--ink); font-weight: 600; }
+    .tabs button.active::after {
+      content: ""; position: absolute; left: 0; right: 0; bottom: -1px;
+      height: 2px; background: var(--indigo);
+    }
+
+    .mh-right { display: flex; align-items: center; gap: 12px; }
+    .btn-text { font-size: 12.5px; color: var(--ink-2); padding: 6px 8px; }
+    .btn-text:hover { color: var(--ink); }
+    .btn-ink {
+      padding: 6px 15px; border-radius: 2px;
+      background: var(--indigo); color: #FBFBF7;
+      font-size: 12.5px; letter-spacing: 0.05em;
+      transition: opacity 140ms;
+    }
+    .btn-ink:hover { opacity: 0.9; }
+
+    /* Exposed Bookbinding 3-Column Grid */
+    .grid-body { flex: 1; display: grid; grid-template-columns: 230px 1fr 410px; min-height: 0; }
+    .grid-body.hide { display: none; }
+
+    /* Left Table of Contents (目次) */
+    .toc {
+      background: var(--margin); border-right: 1px solid var(--rule);
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    .toc-head {
+      padding: 16px 20px 12px; border-bottom: 1px solid var(--rule);
+      display: flex; align-items: baseline; justify-content: space-between;
+    }
+    .toc-head span:first-child { font-family: var(--font-serif); font-size: 14px; letter-spacing: 0.14em; }
+    .toc-head span:last-child { font-size: 11px; color: var(--ink-3); }
+    .toc-list { flex: 1; overflow-y: auto; padding: 10px 0; }
+
+    .ch-group { margin-bottom: 12px; }
+    .ch-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 20px; font-family: var(--font-serif);
+      font-size: 12px; color: var(--ink-3); letter-spacing: 0.04em;
+    }
+    .ch-seal {
+      font-size: 10px; padding: 0 4px; border: 1px solid var(--rule);
+      color: var(--ink-3); border-radius: 1px;
+    }
+    .sc-link {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 20px 8px 34px; font-size: 13px; color: var(--ink-2);
+      position: relative; cursor: pointer; transition: background 120ms;
+    }
+    .sc-link:hover { background: rgba(27,27,25,0.035); color: var(--ink); }
+    .sc-link.active {
+      background: var(--paper); color: var(--ink); font-weight: 500;
+      border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule);
+    }
+    .sc-link.active::before {
+      content: ""; position: absolute; left: 0; top: 0; bottom: 0;
+      width: 3px; background: var(--seal);
+    }
+    .sc-num { font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); }
+
+    .toc-foot {
+      padding: 14px 20px; border-top: 1px solid var(--rule);
+      display: flex; justify-content: space-between; font-size: 12px; color: var(--ink-2);
+    }
+    .toc-foot button:hover { color: var(--indigo); text-decoration: underline; }
+
+    /* Center Theatrical Playscript Manuscript (原稿区) */
+    .script-pane {
+      background: var(--paper); overflow-y: auto;
+      padding: 36px 46px 64px;
+    }
+    .script-sheet { max-width: 680px; margin: 0 auto; }
+
+    .sheet-title-block {
+      display: flex; align-items: flex-end; justify-content: space-between;
+      padding-bottom: 18px; margin-bottom: 24px;
+      border-bottom: 1.5px solid var(--ink);
+    }
+    .sheet-kicker {
+      font-family: var(--font-serif); font-size: 12px; color: var(--seal);
+      letter-spacing: 0.14em; margin-bottom: 6px;
+    }
+    .sheet-title {
+      font-family: var(--font-serif); font-size: 25px; font-weight: 500;
+      letter-spacing: 0.04em;
+    }
+    .sheet-colophon { font-size: 11.5px; color: var(--ink-3); text-align: right; line-height: 1.7; }
+
+    /* Two-Column Printed Playscript Rows */
+    .play-row {
+      display: grid; grid-template-columns: 116px 1fr;
+      gap: 18px; padding: 15px 14px;
+      border-bottom: 1px dashed var(--rule);
+      cursor: pointer; position: relative;
+      transition: background 120ms;
+    }
+    .play-row:hover { background: rgba(243, 241, 233, 0.55); }
+    .play-row.selected {
+      background: var(--white);
+      border-bottom-style: solid;
+      border-bottom-color: var(--rule);
+      box-shadow: inset 3px 0 0 var(--indigo);
+    }
+
+    .play-gutter { display: flex; flex-direction: column; gap: 3px; padding-top: 2px; }
+    .play-index { font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-3); }
+    .play-role {
+      font-family: var(--font-serif); font-size: 14px; font-weight: 600;
+      letter-spacing: 0.1em; color: var(--ink);
+    }
+    .play-role.cue {
+      font-family: var(--font-sans); font-size: 11.5px; font-weight: 500;
+      letter-spacing: 0.06em; color: var(--indigo);
+    }
+    .play-role.branch { color: var(--seal); }
+
+    .play-content { min-width: 0; }
+    .play-prose {
+      font-family: var(--font-serif); font-size: 15.5px; line-height: 1.92;
+      color: var(--ink); letter-spacing: 0.02em;
+    }
+    .play-prose.stage-note {
+      font-family: var(--font-sans); font-size: 13px; line-height: 1.7;
+      color: var(--ink-2);
+    }
+    .marginalia {
+      margin-top: 6px; font-size: 11.5px; color: var(--ink-3);
+      display: flex; gap: 14px;
+    }
+
+    .bunko-choices { margin-top: 10px; border-top: 1px solid var(--rule-light); }
+    .bunko-choice {
+      display: flex; align-items: baseline; justify-content: space-between;
+      padding: 8px 4px; border-bottom: 1px solid var(--rule-light);
+      font-family: var(--font-serif); font-size: 13.5px;
+    }
+    .bunko-choice.locked { color: var(--ink-3); text-decoration: line-through; }
+    .bunko-dest { font-family: var(--font-sans); font-size: 11.5px; color: var(--ink-3); }
+
+    /* Right Gallery Proof Frame (校样画框) */
+    .proof-pane {
+      background: var(--margin); border-left: 1px solid var(--rule);
+      padding: 20px 22px; display: flex; flex-direction: column; gap: 18px;
+      overflow-y: auto;
+    }
+    .proof-label {
+      display: flex; justify-content: space-between; align-items: baseline;
+      border-bottom: 1px solid var(--rule); padding-bottom: 8px;
+    }
+    .proof-label strong { font-family: var(--font-serif); font-size: 13.5px; letter-spacing: 0.1em; font-weight: 600; }
+    .proof-label span { font-family: var(--font-serif); font-size: 12px; color: var(--ink-3); }
+
+    /* Gallery Print Matte Frame */
+    .matte-frame {
+      background: var(--white); padding: 9px;
+      border: 1px solid var(--rule);
+      box-shadow: 0 4px 14px rgba(27,27,25,0.04);
+    }
+    .stage-box { position: relative; width: 100%; aspect-ratio: 16 / 9; overflow: hidden; background: #191816; }
+    .st-choices {
+      position: absolute; inset: 12px 22px 66px;
+      display: flex; flex-direction: column; justify-content: center; gap: 6px; z-index: 4;
+    }
+    .st-ch-btn {
+      padding: 7px 12px; background: rgba(251, 251, 247, 0.92);
+      border: 1px solid var(--ink); color: var(--ink);
+      font-family: var(--font-serif); font-size: 12px;
+      display: flex; justify-content: space-between; align-items: center;
+      transition: all 120ms;
+    }
+    .st-ch-btn:hover:not(.locked) { background: var(--indigo); color: #FBFBF7; border-color: var(--indigo); }
+    .st-ch-btn.locked { opacity: 0.48; cursor: not-allowed; }
+    .st-dlg {
+      position: absolute; left: 8px; right: 8px; bottom: 8px;
+      background: rgba(24, 24, 22, 0.86); border: 1px solid rgba(251,251,247,0.2);
+      padding: 8px 11px; color: #FBFBF7; z-index: 3;
+    }
+    .st-sp { font-family: var(--font-serif); font-size: 11.5px; letter-spacing: 0.08em; margin-bottom: 2px; }
+    .st-tx { font-family: var(--font-serif); font-size: 12px; line-height: 1.55; color: rgba(251,251,247,0.92); }
+
+    /* Ruled Page-Turn Stepper */
+    .step-bar {
+      display: flex; align-items: center; gap: 10px;
+      border: 1px solid var(--rule); background: var(--paper); padding: 6px 10px;
+    }
+    .step-bar button { font-size: 12px; color: var(--ink-2); padding: 2px 6px; }
+    .step-bar button:hover { color: var(--indigo); }
+    .ticks { flex: 1; display: grid; grid-template-columns: repeat(8, 1fr); gap: 3px; }
+    .tick { height: 6px; background: var(--rule); cursor: pointer; transition: background 120ms; }
+    .tick.passed { background: rgba(37, 68, 107, 0.35); }
+    .tick.active { background: var(--seal); }
+
+    /* Printed Ledger Table for Variables */
+    .ledger { background: var(--paper); border: 1px solid var(--rule); }
+    .ledger-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 12px; border-bottom: 1px solid var(--rule-light);
+    }
+    .ledger-row:last-child { border-bottom: none; }
+    .ledger-k { font-family: var(--font-serif); font-size: 13.5px; }
+    .ledger-sub { font-size: 11px; color: var(--ink-3); margin-top: 2px; }
+    .led-step { display: inline-flex; align-items: center; border: 1px solid var(--rule); background: var(--white); }
+    .led-step button { width: 24px; height: 24px; font-size: 13px; color: var(--ink-2); }
+    .led-step button:hover { background: var(--margin); color: var(--ink); }
+    .led-step span { width: 26px; text-align: center; font-family: var(--font-mono); border-left: 1px solid var(--rule-light); border-right: 1px solid var(--rule-light); }
+    .seal-toggle {
+      padding: 3px 10px; border: 1px solid var(--rule); font-size: 11.5px;
+      color: var(--ink-3); background: var(--white); border-radius: 2px;
+    }
+    .seal-toggle.on { border-color: var(--indigo); color: var(--indigo); background: var(--indigo-soft); }
+
+    /* Bookshelf Welcome View (书架首页) */
+    .shelf-view { display: none; flex: 1; overflow-y: auto; padding: 54px 64px; background: var(--paper); }
+    .shelf-view.show { display: block; }
+    .shelf-inner { max-width: 880px; margin: 0 auto; }
+    .shelf-head {
+      display: flex; align-items: flex-end; justify-content: space-between;
+      padding-bottom: 20px; border-bottom: 1.5px solid var(--ink); margin-bottom: 36px;
+    }
+    .shelf-h1 { font-family: var(--font-serif); font-size: 28px; font-weight: 500; letter-spacing: 0.08em; }
+    .shelf-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; }
+    .book-card {
+      border: 1px solid var(--rule); background: var(--white);
+      cursor: pointer; transition: border-color 140ms, transform 140ms;
+      display: flex; flex-direction: column;
+    }
+    .book-card:hover { border-color: var(--indigo); transform: translateY(-2px); }
+    .book-cover {
+      height: 150px; padding: 18px; display: flex; flex-direction: column; justify-content: space-between;
+      color: #FBFBF7; position: relative;
+    }
+    .book-obi {
+      font-family: var(--font-serif); font-size: 11px; letter-spacing: 0.12em;
+      border-bottom: 1px solid rgba(255,255,255,0.35); padding-bottom: 6px; width: fit-content;
+    }
+    .book-body { padding: 16px 18px; }
+    .book-name { font-family: var(--font-serif); font-size: 16.5px; margin-bottom: 6px; letter-spacing: 0.03em; }
+    .book-meta { font-size: 12px; color: var(--ink-3); line-height: 1.7; }
+
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-thumb { background: #D7D3C7; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="masthead">
+      <div class="mh-left">
+        <span class="hanko">稿</span>
+        <span class="work-title">樱庭微风 · 夏日物语</span>
+        <span class="work-sub">GUIE 文库创作室</span>
+      </div>
+
+      <nav class="tabs" id="topTabs">
+        <button class="active" data-mode="script">原稿编排</button>
+        <button data-mode="shelf">书架首页</button>
+      </nav>
+
+      <div class="mh-right">
+        <button class="btn-text">历史校样</button>
+        <button class="btn-text">AI 编审</button>
+        <button class="btn-ink">试玩本幕</button>
+      </div>
+    </header>
+
+    <div class="grid-body" id="scriptGrid">
+      <aside class="toc">
+        <div class="toc-head">
+          <span>目次</span>
+          <span>共六幕</span>
+        </div>
+        <div class="toc-list" id="tocList"></div>
+        <div class="toc-foot">
+          <button>角色名录</button>
+          <button>素材箱</button>
+          <button>装帧导出</button>
+        </div>
+      </aside>
+
+      <main class="script-pane">
+        <div class="script-sheet">
+          <div class="sheet-title-block">
+            <div>
+              <div class="sheet-kicker">序章 · 第一幕</div>
+              <h1 class="sheet-title">黄昏教室的邀请</h1>
+            </div>
+            <div class="sheet-colophon">
+              <div>原稿字数 · 246 字</div>
+              <div>画幅 · 1920×1080 · 自动保存</div>
+            </div>
+          </div>
+
+          <div id="playRows"></div>
+        </div>
+      </main>
+
+      <aside class="proof-pane">
+        <div class="proof-label">
+          <strong>舞台校样</strong>
+          <span id="kanjiCounter">第 五 节 ／ 共 八 节</span>
+        </div>
+
+        <div class="matte-frame">
+          <div class="stage-box" id="stageBox"></div>
+        </div>
+
+        <div class="step-bar">
+          <button id="prevBtn">← 前节</button>
+          <div class="ticks" id="tickBar"></div>
+          <button id="nextBtn">次节 →</button>
+        </div>
+
+        <div>
+          <div class="proof-label" style="margin-bottom:10px">
+            <strong>状态记账簿</strong>
+            <span>实时验算分支</span>
+          </div>
+          <div class="ledger">
+            <div class="ledger-row">
+              <div>
+                <div class="ledger-k">林夏好感度</div>
+                <div class="ledger-sub">隐藏路线门槛 ≥ 3</div>
+              </div>
+              <div class="led-step">
+                <button id="affMinus">−</button>
+                <span id="affVal">2</span>
+                <button id="affPlus">+</button>
+              </div>
+            </div>
+            <div class="ledger-row">
+              <div>
+                <div class="ledger-k">天台钥匙</div>
+                <div class="ledger-sub">秘密天台通行凭据</div>
+              </div>
+              <button class="seal-toggle on" id="keyToggle">已持有</button>
+            </div>
+            <div class="ledger-row">
+              <div>
+                <div class="ledger-k">所属社团</div>
+                <div class="ledger-sub">人物设定记号</div>
+              </div>
+              <span style="font-family:var(--font-serif);color:var(--ink-2)">天文社</span>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <section class="shelf-view" id="shelfView">
+      <div class="shelf-inner">
+        <div class="shelf-head">
+          <div>
+            <div class="sheet-kicker">GUIE · 视觉小说文库</div>
+            <h1 class="shelf-h1">我的创作书架</h1>
+          </div>
+          <button class="btn-ink" style="padding:8px 18px" onclick="setMode('script')">＋ 开写新书稿</button>
+        </div>
+        <div class="shelf-grid" id="shelfGrid"></div>
+      </div>
+    </section>
+  </div>
+
+  <script src="shared/story-data.js"></script>
+  <script>
+    const DATA = window.GUIE_DEMO_DATA;
+    const beats = DATA.beats;
+    const kanjiNum = ['一','二','三','四','五','六','七','八'];
+    let activeIdx = 4;
+    const vars = { ...DATA.initialVars };
+    let chosenOption = null;
+
+    function renderToc() {
+      document.getElementById('tocList').innerHTML = DATA.project.chapters.map(ch => `
+        <div class="ch-group">
+          <div class="ch-row"><span class="ch-seal">${ch.code}</span><span>${ch.title}</span></div>
+          ${ch.scenes.map(sc => `
+            <div class="sc-link ${sc.active ? 'active' : ''}" style="${sc.muted ? 'opacity:0.5' : ''}">
+              <span>${sc.title}</span>
+              <span class="sc-num">${sc.beats}</span>
+            </div>
+          `).join('')}
+        </div>
+      `).join('');
+    }
+
+    function renderPlayscript() {
+      const el = document.getElementById('playRows');
+      el.innerHTML = beats.map((b, i) => {
+        const sel = i === activeIdx ? 'selected' : '';
+        let roleHtml = '';
+        let bodyHtml = '';
+        if (b.type === 'dialogue') {
+          const ch = DATA.characters[b.speaker];
+          roleHtml = `<span class="play-role">${ch.name.split('').join(' ')}</span>`;
+          bodyHtml = `
+            <div class="play-prose">「${b.text}」</div>
+            <div class="marginalia"><span>神情 · ${b.mood}</span>${b.voice ? `<span>语音 · ${b.voice}</span>` : ''}</div>
+          `;
+        } else if (b.type === 'narration') {
+          roleHtml = `<span class="play-role cue">【旁白】</span>`;
+          bodyHtml = `<div class="play-prose">${b.text}</div>`;
+        } else if (b.type === 'choice') {
+          roleHtml = `<span class="play-role cue branch">【选线分支】</span>`;
+          bodyHtml = `
+            <div class="play-prose">${b.prompt}</div>
+            <div class="bunko-choices">
+              ${b.choices.map((c, ci) => {
+                const ok = window.evaluateDemoChoice(c, vars);
+                return `
+                  <div class="bunko-choice ${ok ? '' : 'locked'}">
+                    <span>${kanjiNum[ci]}、${c.label}</span>
+                    <span class="bunko-dest">${c.condition && !ok ? c.condition.desc : '→ ' + c.target}</span>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          `;
+        } else {
+          roleHtml = `<span class="play-role cue">【${b.typeLabel}】</span>`;
+          bodyHtml = `<div class="play-prose stage-note">${b.text}</div><div class="marginalia"><span>${b.note || ''}</span></div>`;
+        }
+        return `
+          <div class="play-row ${sel}" data-idx="${i}">
+            <div class="play-gutter">
+              <span class="play-index">NO.${String(i + 1).padStart(2, '0')}</span>
+              ${roleHtml}
+            </div>
+            <div class="play-content">${bodyHtml}</div>
+          </div>
+        `;
+      }).join('');
+
+      el.querySelectorAll('.play-row').forEach(r => r.addEventListener('click', () => {
+        activeIdx = Number(r.dataset.idx);
+        chosenOption = null;
+        renderAll();
+      }));
+    }
+
+    function renderStage() {
+      const b = beats[activeIdx];
+      const box = document.getElementById('stageBox');
+      const svg = window.renderGuieStageSVG(b, vars, chosenOption);
+
+      let choicesHtml = '';
+      if (b.type === 'choice' && !chosenOption) {
+        choicesHtml = `
+          <div class="st-choices">
+            ${b.choices.map((c, ci) => {
+              const ok = window.evaluateDemoChoice(c, vars);
+              return `
+                <button class="st-ch-btn ${ok ? '' : 'locked'}" data-cid="${c.id}">
+                  <span>${kanjiNum[ci]}、${c.label}</span>
+                  <span style="font-size:10.5px;opacity:0.75">${ok ? '翻阅 ↗' : c.condition.desc}</span>
+                </button>
+              `;
+            }).join('')}
+          </div>
+        `;
+      }
+
+      let sp = '', txt = b.text;
+      if (chosenOption) {
+        sp = DATA.characters[chosenOption.replySpeaker].name;
+        txt = chosenOption.replyText;
+      } else if (b.type === 'dialogue') {
+        sp = DATA.characters[b.speaker].name;
+      } else if (b.type === 'choice') {
+        txt = b.prompt;
+      }
+
+      box.innerHTML = `
+        ${svg}
+        ${choicesHtml}
+        <div class="st-dlg">
+          ${sp ? `<div class="st-sp">【${sp}】</div>` : ''}
+          <div class="st-tx">${txt}</div>
+        </div>
+      `;
+
+      box.querySelectorAll('.st-ch-btn:not(.locked)').forEach(btn => btn.addEventListener('click', () => {
+        chosenOption = b.choices.find(x => x.id === btn.dataset.cid);
+        renderStage();
+      }));
+
+      document.getElementById('kanjiCounter').textContent = `第 ${kanjiNum[activeIdx]} 节 ／ 共 八 节`;
+      document.getElementById('tickBar').innerHTML = beats.map((_, i) => `
+        <div class="tick ${i === activeIdx ? 'active' : (i < activeIdx ? 'passed' : '')}" data-idx="${i}"></div>
+      `).join('');
+      document.querySelectorAll('#tickBar .tick').forEach(t => t.addEventListener('click', () => {
+        activeIdx = Number(t.dataset.idx);
+        chosenOption = null;
+        renderAll();
+      }));
+    }
+
+    function renderVars() {
+      document.getElementById('affVal').textContent = vars.affection;
+      const kt = document.getElementById('keyToggle');
+      kt.textContent = vars.rooftopKey ? '已持有' : '未持有';
+      kt.classList.toggle('on', vars.rooftopKey);
+    }
+
+    function renderShelf() {
+      document.getElementById('shelfGrid').innerHTML = DATA.project.recentProjects.map((p, i) => `
+        <div class="book-card" onclick="setMode('script')">
+          <div class="book-cover" style="background:${p.accentBg}">
+            <span class="book-obi">第 ${kanjiNum[i]} 卷 · ${p.genre}</span>
+            <span style="font-family:var(--font-serif);font-size:12px;opacity:0.85">${p.words}</span>
+          </div>
+          <div class="book-body">
+            <div class="book-name">${p.title}</div>
+            <div class="book-meta">${p.scenes} 幕 · ${p.characters} 名登场人物<br/>最后校订：${p.edited}</div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function setMode(mode) {
+      document.getElementById('scriptGrid').classList.toggle('hide', mode === 'shelf');
+      document.getElementById('shelfView').classList.toggle('show', mode === 'shelf');
+      document.querySelectorAll('#topTabs button').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+    }
+
+    function renderAll() { renderPlayscript(); renderStage(); renderVars(); }
+
+    document.querySelectorAll('#topTabs button').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
+    document.getElementById('prevBtn').addEventListener('click', () => { activeIdx = Math.max(0, activeIdx - 1); chosenOption = null; renderAll(); });
+    document.getElementById('nextBtn').addEventListener('click', () => { activeIdx = Math.min(beats.length - 1, activeIdx + 1); chosenOption = null; renderAll(); });
+    document.getElementById('affMinus').addEventListener('click', () => { vars.affection = Math.max(0, vars.affection - 1); chosenOption = null; renderAll(); });
+    document.getElementById('affPlus').addEventListener('click', () => { vars.affection = Math.min(10, vars.affection + 1); chosenOption = null; renderAll(); });
+    document.getElementById('keyToggle').addEventListener('click', () => { vars.rooftopKey = !vars.rooftopKey; chosenOption = null; renderAll(); });
+
+    renderToc();
+    renderShelf();
+    renderAll();
+  </script>
+</body>
+</html>

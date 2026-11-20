@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GUIE UI 风格方案对比实验室（4 套纯前端可交互 Demo）</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%; overflow: hidden;
+      font-family: "Segoe UI Variable Text", "Segoe UI", "Noto Sans SC", "Microsoft YaHei UI", sans-serif;
+      background: #141413; color: #F4F3EE;
+      -webkit-font-smoothing: antialiased;
+    }
+    button, a { font-family: inherit; color: inherit; text-decoration: none; border: none; background: none; cursor: pointer; }
+
+    .shell { display: flex; flex-direction: column; height: 100vh; width: 100vw; }
+
+    /* Slim Comparison Bar */
+    .switcher {
+      height: 48px; flex-shrink: 0;
+      background: #181817;
+      border-bottom: 1px solid rgba(255,255,255,0.09);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 16px; gap: 12px;
+      user-select: none;
+    }
+    .sw-brand {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 12.5px; font-weight: 600; color: #DFDDD3; white-space: nowrap;
+    }
+    .sw-tabs { display: flex; align-items: center; gap: 6px; overflow-x: auto; }
+    .sw-tab {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 6px 12px; border-radius: 7px;
+      font-size: 12.5px; color: #A6A49C;
+      border: 1px solid transparent;
+      transition: all 140ms; white-space: nowrap;
+    }
+    .sw-tab:hover { background: rgba(255,255,255,0.06); color: #F4F3EE; }
+    .sw-tab.active {
+      background: rgba(255,255,255,0.10);
+      border-color: rgba(255,255,255,0.16);
+      color: #FFFFFF; font-weight: 500;
+    }
+    .swatch-pair { display: inline-flex; gap: 2px; }
+    .dot { width: 9px; height: 9px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.22); }
+    .kbd { font-family: Consolas, monospace; font-size: 10.5px; opacity: 0.5; }
+
+    .sw-right { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+    .sw-action {
+      padding: 5px 11px; border-radius: 6px; font-size: 12px;
+      background: rgba(255,255,255,0.08); color: #E8E6DC;
+      transition: background 140ms;
+    }
+    .sw-action:hover { background: rgba(255,255,255,0.15); }
+    .sw-action.active { background: #C96442; color: #FFF; }
+
+    /* Live Iframe Stage */
+    .frame-wrap { flex: 1; position: relative; min-height: 0; background: #111; }
+    iframe { width: 100%; height: 100%; border: none; display: block; }
+
+    /* Slide-down Comparison Matrix Drawer */
+    .compare-drawer {
+      position: absolute; inset: 0;
+      background: rgba(18, 18, 17, 0.96); backdrop-filter: blur(12px);
+      padding: 32px 36px; overflow-y: auto;
+      display: none; z-index: 20;
+    }
+    .compare-drawer.open { display: block; }
+    .cd-inner { max-width: 1180px; margin: 0 auto; }
+    .cd-head { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 24px; }
+    .cd-h1 { font-size: 22px; font-weight: 500; }
+    .cd-sub { font-size: 13px; color: #A6A49C; margin-top: 4px; }
+
+    .cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; }
+    .card {
+      background: #20201E; border: 1px solid rgba(255,255,255,0.09);
+      border-radius: 12px; padding: 20px 22px;
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .card-top { display: flex; align-items: center; justify-content: space-between; }
+    .card-title { font-size: 16px; font-weight: 600; }
+    .card-ref { font-size: 11.5px; color: #A6A49C; padding: 2px 8px; border-radius: 99px; background: rgba(255,255,255,0.06); }
+    .swatches { display: flex; gap: 8px; flex-wrap: wrap; }
+    .sw-chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-family: Consolas, monospace; font-size: 11px; color: #D4D2CA;
+      background: rgba(0,0,0,0.28); padding: 3px 8px; border-radius: 5px;
+    }
+    .sw-box { width: 12px; height: 12px; border-radius: 3px; border: 1px solid rgba(255,255,255,0.2); }
+    .card-desc { font-size: 13px; line-height: 1.7; color: #CFCBC0; }
+    .card-points { font-size: 12.5px; line-height: 1.75; color: #A6A49C; padding-left: 16px; }
+    .card-foot { display: flex; gap: 10px; margin-top: auto; padding-top: 6px; }
+    .btn-pick {
+      padding: 7px 14px; border-radius: 7px; font-size: 12.5px; font-weight: 500;
+      background: #FAF9F5; color: #141413;
+    }
+    .btn-pick:hover { background: #FFF; }
+    .btn-link {
+      padding: 7px 14px; border-radius: 7px; font-size: 12.5px;
+      background: rgba(255,255,255,0.08); color: #E8E6DC;
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="switcher">
+      <div class="sw-brand">GUIE UI 设计参照</div>
+
+      <div class="sw-tabs" id="tabs">
+        <button class="sw-tab active" data-id="claude">
+          <span class="swatch-pair"><span class="dot" style="background:#FAF9F5"></span><span class="dot" style="background:#C96442"></span></span>
+          <span>A · Claude 羊皮纸沙龙</span>
+          <span class="kbd">1</span>
+        </button>
+        <button class="sw-tab" data-id="obsidian">
+          <span class="swatch-pair"><span class="dot" style="background:#0E1014"></span><span class="dot" style="background:#E0A144"></span></span>
+          <span>B · 暗夜导演台</span>
+          <span class="kbd">2</span>
+        </button>
+        <button class="sw-tab" data-id="kyoto">
+          <span class="swatch-pair"><span class="dot" style="background:#FBFBF7"></span><span class="dot" style="background:#25446B"></span></span>
+          <span>C · 京都文库本</span>
+          <span class="kbd">3</span>
+        </button>
+        <button class="sw-tab" data-id="swiss">
+          <span class="swatch-pair"><span class="dot" style="background:#F3F4F6"></span><span class="dot" style="background:#196953"></span></span>
+          <span>D · 瑞士现代工作室</span>
+          <span class="kbd">4</span>
+        </button>
+      </div>
+
+      <div class="sw-right">
+        <button class="sw-action" id="compareBtn">设计差异对比</button>
+        <a class="sw-action" id="openNewTab" href="01-claude-editorial.html" target="_blank">单独全屏打开 ↗</a>
+      </div>
+    </header>
+
+    <div class="frame-wrap">
+      <iframe id="demoFrame" src="01-claude-editorial.html"></iframe>
+
+      <div class="compare-drawer" id="compareDrawer">
+        <div class="cd-inner">
+          <div class="cd-head">
+            <div>
+              <h1 class="cd-h1">4 套去「AI 感」设计方向横向对比</h1>
+              <p class="cd-sub">每套 Demo 均支持点击剧情行、拖动时间轴、修改林夏好感度/天台钥匙实时解锁第 8 节画面分支，并可切换「工作台 / 首页」。</p>
+            </div>
+            <button class="sw-action" id="closeCompare">返回预览 ✕</button>
+          </div>
+          <div class="cards" id="compareCards"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const DEMOS = {
+      claude: {
+        file: '01-claude-editorial.html',
+        title: '方案 A · Claude 羊皮纸沙龙',
+        ref: '参照 Claude 暖纸编辑美学',
+        swatches: [['#FAF9F5','羊皮纸底'], ['#F4F3EE','亚麻侧栏'], ['#141413','炭墨正文字'], ['#C96442','克制陶土橙'], ['#E8E6DC','细发丝线']],
+        desc: '用「温暖的纸上沙龙」彻底替代生硬的框套框卡片表单。正文采用衬线体（Noto Serif SC + Georgia）呈现真实手稿阅读感，UI 控件极度安静退居幕后。',
+        points: [
+          '消灭 4 栏挤压与卡片嵌套：合并导航与大纲为柔和亚麻侧栏，中间是无边框流式手稿；',
+          '陶土橙只用于主按钮、激活指示线与播放头，不再满屏刺眼刷存在感；',
+          '底部悬浮 Claude 式极简输入框，顺手敲字按回车连录或召唤 AI。'
+        ],
+      },
+      obsidian: {
+        file: '02-obsidian-director.html',
+        title: '方案 B · 暗夜导演台',
+        ref: '参照 Linear × DaVinci Resolve',
+        swatches: [['#0B0C0F','曜石黑底'], ['#111318','控制台灰'], ['#EDF0F5','冷白主字'], ['#E0A144','电影琥珀金'], ['#6894C4','音轨钢蓝']],
+        desc: '专为重度视觉小说导演与夜间创作打造。深色画布让 16:9 彩色立绘与黄昏/星空 CG 画面极其出彩，底部引入专业非编（NLE）多轨水平时间轴。',
+        points: [
+          '重构空间布局：顶部 42px 极简命令栏（⌘K），右侧大尺寸电影监视器，底部四轨水平时间轴（背景/立绘/对白/音乐）；',
+          '用紧凑的等宽编号场记单替代笨重圆角卡片，信息密度高却毫不杂乱；',
+          '放弃廉价霓虹紫/青，改用莱卡/达芬奇风格的克制琥珀金。'
+        ],
+      },
+      kyoto: {
+        file: '03-kyoto-bunko.html',
+        title: '方案 C · 京都文库本 / 原稿纸',
+        ref: '参照 MUJI × iA Writer × 日系纸本',
+        swatches: [['#FBFBF7','和纸象牙'], ['#F3F1E9','石色边栏'], ['#1B1B19','松烟墨'], ['#25446B','蓝染主色'], ['#B54233','朱印点缀']],
+        desc: '回归视觉小说最本源的轻小说/剧本出版气质。彻底抛弃圆润 SaaS 气泡卡片，采用建筑感 1px 装帧网格线、双栏戏剧台本排版与画廊校样画框。',
+        points: [
+          '极锐利 0–2px 纸品边角，彻底摆脱“Tailwind AI 模板”常见的圆角药丸堆砌；',
+          '左栏角色名与印记、右栏宋体对白与行间舞台批注，一眼辨识剧本结构；',
+          '朱红色仅作「稿」字印章、章节书签竖线和当前节拍点缀，极其耐看。'
+        ],
+      },
+      swiss: {
+        file: '04-swiss-craft.html',
+        title: '方案 D · 瑞士现代工作室',
+        ref: '参照 Craft × Apple Studio × Dieter Rams',
+        swatches: [['#F3F4F6','冷雾画廊底'], ['#FFFFFF','悬浮白纸页'], ['#111318','纯黑主按钮'], ['#196953','阿尔卑斯松绿'], ['#8892A2','中性冷灰']],
+        desc: '如果你偏爱清爽明亮、完全不偏黄的现代苹果/瑞士风格，这套方案用柔和环境阴影托起整张纯白悬浮文稿页与右侧独立监视卡，轻盈通透。',
+        points: [
+          '整场剧本写在同一张悬浮白纸页内，而不是 20 个互相打架的带边框小盒子；',
+          '主按钮采用极简纯黑（Apple/Dieter Rams 风格），状态强调采用沉静松绿色；',
+          'iOS 质感实体拨动开关与胶囊时间段，细节克制且具有桌面原生高级感。'
+        ],
+      },
+    };
+
+    let current = 'claude';
+    const frame = document.getElementById('demoFrame');
+    const openLink = document.getElementById('openNewTab');
+    const drawer = document.getElementById('compareDrawer');
+    const cmpBtn = document.getElementById('compareBtn');
+
+    function selectDemo(id) {
+      current = id;
+      const d = DEMOS[id];
+      frame.src = d.file;
+      openLink.href = d.file;
+      document.querySelectorAll('.sw-tab').forEach(t => t.classList.toggle('active', t.dataset.id === id));
+      drawer.classList.remove('open');
+      cmpBtn.classList.remove('active');
+    }
+
+    document.querySelectorAll('.sw-tab').forEach(t => t.addEventListener('click', () => selectDemo(t.dataset.id)));
+    cmpBtn.addEventListener('click', () => {
+      const open = drawer.classList.toggle('open');
+      cmpBtn.classList.toggle('active', open);
+    });
+    document.getElementById('closeCompare').addEventListener('click', () => {
+      drawer.classList.remove('open');
+      cmpBtn.classList.remove('active');
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.target.tagName === 'INPUT') return;
+      if (e.key === '1') selectDemo('claude');
+      if (e.key === '2') selectDemo('obsidian');
+      if (e.key === '3') selectDemo('kyoto');
+      if (e.key === '4') selectDemo('swiss');
+      if (e.key === 'Escape') { drawer.classList.remove('open'); cmpBtn.classList.remove('active'); }
+    });
+
+    document.getElementById('compareCards').innerHTML = Object.entries(DEMOS).map(([id, d]) => `
+      <div class="card">
+        <div class="card-top">
+          <div class="card-title">${d.title}</div>
+          <span class="card-ref">${d.ref}</span>
+        </div>
+        <div class="swatches">
+          ${d.swatches.map(([hex, name]) => `<span class="sw-chip"><span class="sw-box" style="background:${hex}"></span>${hex} ${name}</span>`).join('')}
+        </div>
+        <p class="card-desc">${d.desc}</p>
+        <ul class="card-points">${d.points.map(p => `<li>${p}</li>`).join('')}</ul>
+        <div class="card-foot">
+          <button class="btn-pick" onclick="selectDemo('${id}')">立即体验此方案</button>
+          <a class="btn-link" href="${d.file}" target="_blank">新标签全屏打开 ↗</a>
+        </div>
+      </div>
+    `).join('');
+  </script>
+</body>
+</html>

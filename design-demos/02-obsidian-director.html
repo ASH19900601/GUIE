@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GUIE · 方案 B：暗夜导演台（Linear × DaVinci）</title>
+  <style>
+    :root {
+      --bg-0: #0B0C0F;
+      --bg-1: #111318;
+      --bg-2: #171A21;
+      --bg-3: #1F232C;
+      --line: rgba(255, 255, 255, 0.07);
+      --line-strong: rgba(255, 255, 255, 0.14);
+      --ink-1: #EDF0F5;
+      --ink-2: #9CA3B2;
+      --ink-3: #5E6575;
+      --amber: #E0A144;
+      --amber-soft: rgba(224, 161, 68, 0.14);
+      --steel: #6894C4;
+      --steel-soft: rgba(104, 148, 196, 0.16);
+      --sage: #6AA37F;
+      --sage-soft: rgba(106, 163, 127, 0.16);
+      --rose: #CF6F6A;
+      --rose-soft: rgba(207, 111, 106, 0.16);
+      --font-sans: "Segoe UI Variable Text", "Segoe UI", "Noto Sans SC", "Microsoft YaHei UI", sans-serif;
+      --font-mono: "Cascadia Code", Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%; background: var(--bg-0); color: var(--ink-1);
+      font-family: var(--font-sans); font-size: 13px;
+      -webkit-font-smoothing: antialiased; overflow: hidden;
+    }
+    button { font-family: inherit; border: none; background: none; color: inherit; cursor: pointer; }
+
+    .app { display: flex; flex-direction: column; height: 100vh; width: 100vw; }
+
+    /* Slim 42px Pro Studio Topbar */
+    .topbar {
+      height: 42px; flex-shrink: 0;
+      background: var(--bg-1);
+      border-bottom: 1px solid var(--line);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 14px;
+      user-select: none;
+    }
+    .tb-left { display: flex; align-items: center; gap: 12px; }
+    .logo {
+      display: flex; align-items: center; gap: 8px;
+      font-weight: 600; font-size: 12.5px; letter-spacing: 0.04em; color: var(--ink-1);
+    }
+    .logo-mark {
+      width: 18px; height: 18px; border-radius: 4px;
+      border: 1.5px solid var(--amber);
+      display: grid; place-items: center;
+      font-size: 10px; color: var(--amber); font-family: var(--font-mono);
+    }
+    .proj-sep { color: var(--ink-3); }
+    .proj-name { color: var(--ink-2); font-size: 12.5px; }
+    .res-tag {
+      font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-3);
+      padding: 2px 6px; border-radius: 4px; background: var(--bg-2); border: 1px solid var(--line);
+    }
+
+    /* Centered Linear-style Command Palette Trigger */
+    .cmd-pill {
+      display: flex; align-items: center; gap: 10px;
+      width: 310px; height: 28px; padding: 0 10px;
+      border-radius: 6px; background: var(--bg-2); border: 1px solid var(--line);
+      color: var(--ink-3); font-size: 12px; transition: border-color 140ms, color 140ms;
+    }
+    .cmd-pill:hover { border-color: var(--line-strong); color: var(--ink-2); }
+    .cmd-kbd {
+      margin-left: auto; font-family: var(--font-mono); font-size: 10.5px;
+      padding: 1px 5px; border-radius: 3px; background: var(--bg-3); color: var(--ink-2);
+    }
+
+    .tb-right { display: flex; align-items: center; gap: 8px; }
+    .mode-pills {
+      display: inline-flex; background: var(--bg-0); padding: 2px; border-radius: 6px;
+      border: 1px solid var(--line);
+    }
+    .mode-pills button {
+      padding: 3px 10px; border-radius: 4px; font-size: 11.5px; color: var(--ink-3);
+    }
+    .mode-pills button.active { background: var(--bg-3); color: var(--ink-1); font-weight: 500; }
+    .btn-run {
+      display: inline-flex; align-items: center; gap: 6px;
+      height: 27px; padding: 0 12px; border-radius: 6px;
+      background: var(--amber); color: #111215;
+      font-size: 12px; font-weight: 600;
+      transition: filter 140ms;
+    }
+    .btn-run:hover { filter: brightness(1.08); }
+
+    /* Body Grid */
+    .body-area { flex: 1; display: flex; min-height: 0; }
+
+    /* 46px Slim Activity Rail */
+    .rail {
+      width: 46px; flex-shrink: 0;
+      background: var(--bg-1); border-right: 1px solid var(--line);
+      display: flex; flex-direction: column; align-items: center;
+      padding: 10px 0; gap: 6px;
+    }
+    .rail-btn {
+      width: 32px; height: 32px; border-radius: 6px;
+      display: grid; place-items: center; color: var(--ink-3);
+      transition: all 140ms;
+    }
+    .rail-btn:hover { background: var(--bg-2); color: var(--ink-1); }
+    .rail-btn.active { background: var(--bg-3); color: var(--amber); }
+    .rail-btn svg { width: 16px; height: 16px; }
+    .rail-spacer { flex: 1; }
+
+    /* Main Director Deck (Upper Split + Bottom NLE Multi-Track Timeline) */
+    .deck { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+    .deck.hide { display: none; }
+
+    .upper-split { flex: 1; display: flex; min-height: 0; }
+
+    /* Compact Scene List Column */
+    .scene-col {
+      width: 196px; flex-shrink: 0;
+      background: var(--bg-1); border-right: 1px solid var(--line);
+      padding: 12px 10px; overflow-y: auto;
+    }
+    .col-cap {
+      font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em;
+      color: var(--ink-3); padding: 0 8px 8px; display: flex; justify-content: space-between;
+    }
+    .ch-hdr { font-size: 11px; color: var(--ink-3); padding: 10px 8px 4px; }
+    .sc-item {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 6px 8px; border-radius: 5px; font-size: 12.5px; color: var(--ink-2);
+      cursor: pointer; margin-bottom: 1px;
+    }
+    .sc-item:hover { background: var(--bg-2); color: var(--ink-1); }
+    .sc-item.active { background: var(--bg-3); color: var(--ink-1); font-weight: 500; }
+    .sc-cnt { font-family: var(--font-mono); font-size: 10.5px; color: var(--ink-3); }
+
+    /* Center Script Cue Sheet (zero boxed cards — precision linear rows) */
+    .cue-col {
+      flex: 1; min-width: 0; background: var(--bg-0);
+      display: flex; flex-direction: column;
+    }
+    .cue-bar {
+      height: 36px; flex-shrink: 0;
+      border-bottom: 1px solid var(--line);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 18px; background: var(--bg-1);
+    }
+    .cue-bar-left { display: flex; align-items: center; gap: 10px; font-size: 12.5px; font-weight: 500; }
+    .cue-bar-right { display: flex; align-items: center; gap: 6px; }
+    .mini-btn {
+      padding: 3px 9px; border-radius: 5px; font-size: 11.5px; color: var(--ink-2);
+      background: var(--bg-2); border: 1px solid var(--line);
+    }
+    .mini-btn:hover { color: var(--ink-1); border-color: var(--line-strong); }
+
+    .cue-scroll { flex: 1; overflow-y: auto; padding: 8px 0; }
+    .cue-row {
+      display: grid; grid-template-columns: 44px 58px 1fr auto;
+      align-items: baseline; gap: 12px;
+      padding: 10px 20px;
+      border-bottom: 1px solid rgba(255,255,255,0.035);
+      border-left: 2px solid transparent;
+      cursor: pointer; transition: background 120ms;
+    }
+    .cue-row:hover { background: rgba(255,255,255,0.025); }
+    .cue-row.selected {
+      background: rgba(224, 161, 68, 0.07);
+      border-left-color: var(--amber);
+    }
+    .cue-idx { font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); }
+    .cue-row.selected .cue-idx { color: var(--amber); }
+
+    .cue-badge {
+      font-size: 10.5px; font-weight: 500; padding: 1.5px 6px; border-radius: 4px;
+      text-align: center; letter-spacing: 0.02em;
+    }
+    .t-bg { background: rgba(255,255,255,0.06); color: var(--ink-2); }
+    .t-audio { background: var(--steel-soft); color: #9CC0E8; }
+    .t-narration { background: rgba(255,255,255,0.05); color: var(--ink-2); }
+    .t-sprite { background: rgba(168, 138, 210, 0.14); color: #C7B0EA; }
+    .t-dialogue { background: var(--amber-soft); color: #F0BE6E; }
+    .t-state { background: var(--sage-soft); color: #94CFA9; }
+    .t-choice { background: var(--rose-soft); color: #EA9894; }
+
+    .cue-main { min-width: 0; }
+    .cue-speaker { font-weight: 600; margin-right: 8px; font-size: 12.5px; }
+    .cue-text { color: var(--ink-1); line-height: 1.65; font-size: 13.5px; }
+    .cue-text.dim { color: var(--ink-2); font-size: 12.5px; }
+    .cue-meta { font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); white-space: nowrap; }
+
+    .cue-choices-mini { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
+    .cc-chip {
+      font-size: 11.5px; padding: 3px 8px; border-radius: 4px;
+      background: var(--bg-2); border: 1px solid var(--line); color: var(--ink-2);
+    }
+    .cc-chip.locked { opacity: 0.45; }
+
+    /* Right Prominent 16:9 Cinema Monitor */
+    .monitor-col {
+      width: 470px; flex-shrink: 0;
+      background: var(--bg-1); border-left: 1px solid var(--line);
+      padding: 14px 16px; display: flex; flex-direction: column; gap: 14px;
+      overflow-y: auto;
+    }
+    .mon-head {
+      display: flex; align-items: center; justify-content: space-between;
+      font-size: 11.5px; color: var(--ink-2);
+    }
+    .tc-readout {
+      font-family: var(--font-mono); font-size: 12px; color: var(--amber);
+      letter-spacing: 0.04em;
+    }
+    .cinema-frame {
+      position: relative; width: 100%; aspect-ratio: 16 / 9;
+      border-radius: 7px; overflow: hidden;
+      background: #050608;
+      border: 1px solid rgba(255,255,255,0.10);
+      box-shadow: 0 12px 32px rgba(0,0,0,0.45);
+    }
+    .mon-choices {
+      position: absolute; inset: 14px 32px 72px;
+      display: flex; flex-direction: column; justify-content: center; gap: 7px; z-index: 4;
+    }
+    .mon-choice-btn {
+      padding: 7px 12px; border-radius: 5px;
+      background: rgba(11, 12, 15, 0.84); backdrop-filter: blur(8px);
+      border: 1px solid rgba(255,255,255,0.16);
+      color: var(--ink-1); font-size: 12px;
+      display: flex; justify-content: space-between; align-items: center;
+      transition: all 130ms;
+    }
+    .mon-choice-btn:hover:not(.locked) { border-color: var(--amber); background: rgba(224,161,68,0.22); }
+    .mon-choice-btn.locked { opacity: 0.42; cursor: not-allowed; }
+    .mon-sub {
+      position: absolute; left: 10px; right: 10px; bottom: 10px;
+      background: rgba(11, 12, 15, 0.84); backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.10); border-radius: 6px;
+      padding: 9px 12px; z-index: 3;
+    }
+    .mon-sp { font-size: 11.5px; font-weight: 600; margin-bottom: 2px; }
+    .mon-tx { font-size: 12px; line-height: 1.5; color: #E2E6EE; }
+
+    /* Studio State Panel (Compact Industrial Grid) */
+    .state-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+    }
+    .stat-cell {
+      background: var(--bg-2); border: 1px solid var(--line);
+      border-radius: 6px; padding: 9px 11px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .stat-label { font-size: 11px; color: var(--ink-3); }
+    .stat-name { font-size: 12.5px; color: var(--ink-1); margin-top: 2px; }
+    .dark-step { display: inline-flex; align-items: center; gap: 7px; }
+    .dark-step button {
+      width: 22px; height: 22px; border-radius: 4px;
+      background: var(--bg-3); color: var(--ink-1); border: 1px solid var(--line);
+    }
+    .dark-step button:hover { border-color: var(--amber); color: var(--amber); }
+    .dark-step span { font-family: var(--font-mono); font-size: 13px; color: var(--amber); min-width: 14px; text-align: center; }
+    .dark-toggle {
+      padding: 3px 9px; border-radius: 4px; font-size: 11px; font-family: var(--font-mono);
+      background: var(--bg-3); color: var(--ink-3); border: 1px solid var(--line);
+    }
+    .dark-toggle.on { background: var(--sage-soft); color: #94CFA9; border-color: rgba(106,163,127,0.35); }
+
+    /* Bottom Full-Width NLE Multi-Track Timeline */
+    .nle-dock {
+      height: 152px; flex-shrink: 0;
+      background: var(--bg-1);
+      border-top: 1px solid var(--line-strong);
+      display: flex; flex-direction: column;
+      user-select: none;
+    }
+    .nle-header {
+      height: 28px; border-bottom: 1px solid var(--line);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 14px; font-size: 11px; color: var(--ink-3);
+    }
+    .nle-transport { display: flex; align-items: center; gap: 6px; }
+    .nle-transport button {
+      padding: 2px 8px; border-radius: 4px; background: var(--bg-2); color: var(--ink-2);
+      border: 1px solid var(--line); font-size: 11px;
+    }
+    .nle-transport button:hover { color: var(--ink-1); border-color: var(--line-strong); }
+
+    .nle-body { flex: 1; display: grid; grid-template-columns: 110px 1fr; position: relative; }
+    .nle-labels {
+      border-right: 1px solid var(--line); background: var(--bg-1);
+      display: grid; grid-template-rows: repeat(4, 1fr);
+    }
+    .nle-track-name {
+      display: flex; align-items: center; gap: 7px; padding: 0 12px;
+      font-size: 11px; color: var(--ink-3); border-bottom: 1px solid rgba(255,255,255,0.03);
+    }
+    .tr-dot { width: 6px; height: 6px; border-radius: 2px; }
+
+    .nle-lanes {
+      position: relative;
+      display: grid; grid-template-rows: repeat(4, 1fr);
+      background:
+        repeating-linear-gradient(to right, transparent, transparent calc(12.5% - 1px), rgba(255,255,255,0.04) calc(12.5% - 1px), rgba(255,255,255,0.04) 12.5%);
+      cursor: pointer;
+    }
+    .lane {
+      position: relative; display: grid; grid-template-columns: repeat(8, 1fr);
+      align-items: center; padding: 0 4px; gap: 4px;
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+    }
+    .clip {
+      height: 20px; border-radius: 4px; padding: 0 7px;
+      font-size: 10.5px; display: flex; align-items: center;
+      overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+      border: 1px solid transparent; transition: filter 120ms;
+    }
+    .clip:hover { filter: brightness(1.16); }
+    .clip-bg { grid-column: 1 / 9; background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.08); color: var(--ink-2); }
+    .clip-spr { grid-column: 4 / 9; background: rgba(168,138,210,0.16); border-color: rgba(168,138,210,0.28); color: #D4C3EE; }
+    .clip-bgm { grid-column: 2 / 9; background: var(--steel-soft); border-color: rgba(104,148,196,0.3); color: #A6C8EC; }
+    .clip-dlg { background: var(--amber-soft); border-color: rgba(224,161,68,0.28); color: #F0C67F; }
+    .clip-ch { background: var(--rose-soft); border-color: rgba(207,111,106,0.38); color: #F0A7A3; }
+    .clip-st { background: var(--sage-soft); border-color: rgba(106,163,127,0.32); color: #A1D8B5; }
+
+    /* Golden Vertical Playhead */
+    .playhead {
+      position: absolute; top: 0; bottom: 0; width: 2px;
+      background: var(--amber); pointer-events: none;
+      transition: left 140ms cubic-bezier(0.2, 0.8, 0.2, 1);
+      box-shadow: 0 0 10px rgba(224,161,68,0.55);
+      z-index: 5;
+    }
+    .playhead::before {
+      content: ""; position: absolute; top: -1px; left: -5px;
+      border-left: 6px solid transparent; border-right: 6px solid transparent;
+      border-top: 7px solid var(--amber);
+    }
+
+    /* Dark Gallery Welcome View */
+    .welcome { display: none; flex: 1; background: var(--bg-0); padding: 48px 56px; overflow-y: auto; }
+    .welcome.show { display: block; }
+    .wel-head { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 30px; max-width: 1020px; margin-inline: auto; }
+    .wel-h1 { font-size: 24px; font-weight: 500; letter-spacing: -0.02em; }
+    .wel-sub { font-size: 13px; color: var(--ink-3); margin-top: 5px; }
+    .gallery {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px;
+      max-width: 1020px; margin: 0 auto;
+    }
+    .gal-card {
+      background: var(--bg-1); border: 1px solid var(--line);
+      border-radius: 9px; overflow: hidden; cursor: pointer;
+      transition: border-color 150ms, transform 150ms;
+    }
+    .gal-card:hover { border-color: rgba(224,161,68,0.55); transform: translateY(-2px); }
+    .gal-thumb { aspect-ratio: 16 / 9; position: relative; padding: 14px; display: flex; flex-direction: column; justify-content: flex-end; }
+    .gal-badge { font-family: var(--font-mono); font-size: 10px; padding: 2px 6px; border-radius: 4px; background: rgba(0,0,0,0.45); width: fit-content; }
+    .gal-meta { padding: 14px 15px; }
+    .gal-title { font-size: 14.5px; font-weight: 500; margin-bottom: 5px; }
+    .gal-info { font-size: 12px; color: var(--ink-3); display: flex; justify-content: space-between; }
+
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 99px; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="tb-left">
+        <div class="logo">
+          <span class="logo-mark">G</span>
+          <span>GUIE STUDIO</span>
+        </div>
+        <span class="proj-sep">/</span>
+        <span class="proj-name">樱庭微风 · 夏日物语</span>
+        <span class="res-tag">1080P · 60FPS</span>
+      </div>
+
+      <button class="cmd-pill" title="快速命令面板">
+        <span>⌘ 搜索场景、角色、跳转节拍或召唤 AI…</span>
+        <span class="cmd-kbd">⌘K</span>
+      </button>
+
+      <div class="tb-right">
+        <div class="mode-pills" id="modePills">
+          <button class="active" data-mode="deck">导演台</button>
+          <button data-mode="welcome">工程库</button>
+        </div>
+        <button class="btn-run">▶ 运行实机</button>
+      </div>
+    </header>
+
+    <div class="body-area">
+      <!-- Slim Icon Rail -->
+      <nav class="rail">
+        <button class="rail-btn active" title="剧本与时间轴">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        </button>
+        <button class="rail-btn" title="选线流程图">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><circle cx="18" cy="6" r="3"/><path d="M9 6h6M8.5 8.5l7 7"/></svg>
+        </button>
+        <button class="rail-btn" title="角色与状态">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 20c1.5-4 14.5-4 16 0"/></svg>
+        </button>
+        <button class="rail-btn" title="素材库">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="m21 15-5-5L5 21"/></svg>
+        </button>
+        <div class="rail-spacer"></div>
+        <button class="rail-btn" title="AI 导演助手" style="color:var(--amber)">✦</button>
+      </nav>
+
+      <!-- Main Director Deck -->
+      <div class="deck" id="deckView">
+        <div class="upper-split">
+          <aside class="scene-col">
+            <div class="col-cap"><span>章节场次</span><span>+</span></div>
+            <div id="sceneList"></div>
+          </aside>
+
+          <section class="cue-col">
+            <div class="cue-bar">
+              <div class="cue-bar-left">
+                <span>序章 · 黄昏教室的邀请</span>
+                <span style="color:var(--ink-3);font-weight:400;font-size:11.5px">8 节拍</span>
+              </div>
+              <div class="cue-bar-right">
+                <button class="mini-btn">+ 对白</button>
+                <button class="mini-btn">+ 分支</button>
+                <button class="mini-btn">离线配音转写</button>
+              </div>
+            </div>
+            <div class="cue-scroll" id="cueList"></div>
+          </section>
+
+          <aside class="monitor-col">
+            <div class="mon-head">
+              <span>STAGE MONITOR · 16:9</span>
+              <span class="tc-readout" id="tcReadout">BEAT 05 / 08</span>
+            </div>
+            <div class="cinema-frame" id="cinemaFrame"></div>
+
+            <div class="mon-head" style="margin-top:2px">
+              <span>LIVE STORY STATE</span>
+              <span style="color:var(--ink-3);font-size:11px">修改即刻刷新条件分支</span>
+            </div>
+            <div class="state-grid">
+              <div class="stat-cell">
+                <div>
+                  <div class="stat-label">数值 · 跨周目</div>
+                  <div class="stat-name">林夏好感度</div>
+                </div>
+                <div class="dark-step">
+                  <button id="affMinus">−</button>
+                  <span id="affVal">2</span>
+                  <button id="affPlus">+</button>
+                </div>
+              </div>
+              <div class="stat-cell">
+                <div>
+                  <div class="stat-label">道具开关</div>
+                  <div class="stat-name">天台钥匙</div>
+                </div>
+                <button class="dark-toggle on" id="keyToggle">ON</button>
+              </div>
+            </div>
+          </aside>
+        </div>
+
+        <!-- Bottom NLE Multi-Track Timeline -->
+        <footer class="nle-dock">
+          <div class="nle-header">
+            <div class="nle-transport">
+              <button id="prevBtn">⏮ 上一节</button>
+              <button id="nextBtn">下一节 ⏭</button>
+              <span style="margin-left:8px;font-family:var(--font-mono)" id="nleBeatDesc">BEAT 05 · 对白 · 林夏</span>
+            </div>
+            <span style="font-family:var(--font-mono)">点击轨道任意节拍位置移动播放头</span>
+          </div>
+          <div class="nle-body">
+            <div class="nle-labels">
+              <div class="nle-track-name"><span class="tr-dot" style="background:#8E96A8"></span>背景层 BG</div>
+              <div class="nle-track-name"><span class="tr-dot" style="background:#B392E0"></span>立绘层 CHR</div>
+              <div class="nle-track-name"><span class="tr-dot" style="background:var(--amber)"></span>剧本轨 DLG</div>
+              <div class="nle-track-name"><span class="tr-dot" style="background:var(--steel)"></span>音轨 BGM</div>
+            </div>
+            <div class="nle-lanes" id="nleLanes">
+              <div class="playhead" id="playhead"></div>
+              <div class="lane"><div class="clip clip-bg">黄昏教室 · 橘色晚霞 (Fade 0.8s)</div></div>
+              <div class="lane"><div class="clip clip-spr">林夏 [左 · 微笑] + 沈秋 [右 · 温柔]</div></div>
+              <div class="lane" id="dlgLane"></div>
+              <div class="lane"><div class="clip clip-bgm">♪ 黄昏微风 · 钢琴独奏 (68% Loop)</div></div>
+            </div>
+          </div>
+        </footer>
+      </div>
+
+      <!-- Dark Project Manager Welcome View -->
+      <section class="welcome" id="welcomeView">
+        <div class="wel-head">
+          <div>
+            <h1 class="wel-h1">近期工程</h1>
+            <p class="wel-sub">Ren'Py 8.5.3 内置引擎 · 多语种字体 · Paraformer 离线语音转写已就绪</p>
+          </div>
+          <button class="btn-run" style="height:32px;padding:0 16px" onclick="setMode('deck')">＋ 新建视觉小说工程</button>
+        </div>
+        <div class="gallery" id="galleryGrid"></div>
+      </section>
+    </div>
+  </div>
+
+  <script src="shared/story-data.js"></script>
+  <script>
+    const DATA = window.GUIE_DEMO_DATA;
+    const beats = DATA.beats;
+    let activeIdx = 4;
+    const vars = { ...DATA.initialVars };
+    let chosenOption = null;
+
+    const typeClass = {
+      background: 't-bg', audio: 't-audio', narration: 't-narration',
+      sprite: 't-sprite', dialogue: 't-dialogue', state: 't-state', choice: 't-choice'
+    };
+
+    function renderScenes() {
+      document.getElementById('sceneList').innerHTML = DATA.project.chapters.map(ch => `
+        <div class="ch-hdr">${ch.title}</div>
+        ${ch.scenes.map(sc => `
+          <div class="sc-item ${sc.active ? 'active' : ''}" style="${sc.muted ? 'opacity:0.48' : ''}">
+            <span>${sc.title}</span>
+            <span class="sc-cnt">${sc.beats}</span>
+          </div>
+        `).join('')}
+      `).join('');
+    }
+
+    function renderCues() {
+      const el = document.getElementById('cueList');
+      el.innerHTML = beats.map((b, i) => {
+        const sel = i === activeIdx ? 'selected' : '';
+        let content = '';
+        if (b.type === 'dialogue') {
+          const ch = DATA.characters[b.speaker];
+          content = `<span class="cue-speaker" style="color:${ch.darkColor}">${ch.name}</span><span class="cue-text">${b.text}</span>`;
+        } else if (b.type === 'choice') {
+          content = `
+            <div class="cue-text">${b.prompt}</div>
+            <div class="cue-choices-mini">
+              ${b.choices.map(c => {
+                const ok = window.evaluateDemoChoice(c, vars);
+                return `<span class="cc-chip ${ok ? '' : 'locked'}">${c.label} → ${c.target}</span>`;
+              }).join('')}
+            </div>
+          `;
+        } else {
+          content = `<span class="cue-text ${b.type === 'narration' ? '' : 'dim'}">${b.text}</span>`;
+        }
+        return `
+          <div class="cue-row ${sel}" data-idx="${i}">
+            <span class="cue-idx">${String(i + 1).padStart(2, '0')}</span>
+            <span class="cue-badge ${typeClass[b.type]}">${b.typeLabel}</span>
+            <div class="cue-main">${content}</div>
+            <span class="cue-meta">${b.note || ''}</span>
+          </div>
+        `;
+      }).join('');
+
+      el.querySelectorAll('.cue-row').forEach(r => r.addEventListener('click', () => {
+        activeIdx = Number(r.dataset.idx);
+        chosenOption = null;
+        renderAll();
+      }));
+    }
+
+    function renderNleLane() {
+      const lane = document.getElementById('dlgLane');
+      lane.innerHTML = beats.map((b, i) => {
+        if (b.type === 'background' || b.type === 'audio' || b.type === 'sprite') return `<div></div>`;
+        const cls = b.type === 'choice' ? 'clip-ch' : (b.type === 'state' ? 'clip-st' : 'clip-dlg');
+        const lbl = b.speaker ? DATA.characters[b.speaker].name : b.typeLabel;
+        return `<div class="clip ${cls}" data-idx="${i}" style="${i === activeIdx ? 'outline:1.5px solid #fff;' : ''}">${lbl}</div>`;
+      }).join('');
+    }
+
+    function renderMonitor() {
+      const b = beats[activeIdx];
+      const frame = document.getElementById('cinemaFrame');
+      const svg = window.renderGuieStageSVG(b, vars, chosenOption);
+
+      let choicesHtml = '';
+      if (b.type === 'choice' && !chosenOption) {
+        choicesHtml = `
+          <div class="mon-choices">
+            ${b.choices.map(c => {
+              const ok = window.evaluateDemoChoice(c, vars);
+              return `
+                <button class="mon-choice-btn ${ok ? '' : 'locked'}" data-cid="${c.id}">
+                  <span>${c.label}</span>
+                  <span style="font-size:10.5px;color:${ok ? 'var(--amber)' : 'var(--ink-3)'}">${ok ? 'JUMP ↗' : c.condition.desc}</span>
+                </button>
+              `;
+            }).join('')}
+          </div>
+        `;
+      }
+
+      let sp = '', col = '#E0A144', txt = b.text;
+      if (chosenOption) {
+        const ch = DATA.characters[chosenOption.replySpeaker];
+        sp = ch.name; col = ch.darkColor; txt = chosenOption.replyText;
+      } else if (b.type === 'dialogue') {
+        const ch = DATA.characters[b.speaker];
+        sp = ch.name; col = ch.darkColor;
+      } else if (b.type === 'choice') {
+        txt = b.prompt;
+      }
+
+      frame.innerHTML = `
+        ${svg}
+        ${choicesHtml}
+        <div class="mon-sub">
+          ${sp ? `<div class="mon-sp" style="color:${col}">${sp}</div>` : ''}
+          <div class="mon-tx">${txt}</div>
+        </div>
+      `;
+
+      frame.querySelectorAll('.mon-choice-btn:not(.locked)').forEach(btn => {
+        btn.addEventListener('click', () => {
+          chosenOption = b.choices.find(x => x.id === btn.dataset.cid);
+          renderMonitor();
+        });
+      });
+
+      const idxStr = String(activeIdx + 1).padStart(2, '0');
+      document.getElementById('tcReadout').textContent = `BEAT ${idxStr} / 08`;
+      document.getElementById('nleBeatDesc').textContent = `BEAT ${idxStr} · ${b.typeLabel}${b.speaker ? ' · ' + DATA.characters[b.speaker].name : ''}`;
+      document.getElementById('playhead').style.left = `calc(${((activeIdx + 0.5) / beats.length) * 100}%)`;
+    }
+
+    function renderVars() {
+      document.getElementById('affVal').textContent = vars.affection;
+      const kt = document.getElementById('keyToggle');
+      kt.textContent = vars.rooftopKey ? 'ON' : 'OFF';
+      kt.classList.toggle('on', vars.rooftopKey);
+    }
+
+    function renderGallery() {
+      document.getElementById('galleryGrid').innerHTML = DATA.project.recentProjects.map(p => `
+        <div class="gal-card" onclick="setMode('deck')">
+          <div class="gal-thumb" style="background:${p.accentBg}">
+            <span class="gal-badge">${p.genre}</span>
+          </div>
+          <div class="gal-meta">
+            <div class="gal-title">${p.title}</div>
+            <div class="gal-info"><span>${p.scenes} 场景 · ${p.words}</span><span>${p.edited}</span></div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function setMode(mode) {
+      document.getElementById('deckView').classList.toggle('hide', mode === 'welcome');
+      document.getElementById('welcomeView').classList.toggle('show', mode === 'welcome');
+      document.querySelectorAll('#modePills button').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+    }
+
+    function renderAll() { renderCues(); renderNleLane(); renderMonitor(); renderVars(); }
+
+    document.querySelectorAll('#modePills button').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
+    document.getElementById('prevBtn').addEventListener('click', () => { activeIdx = Math.max(0, activeIdx - 1); chosenOption = null; renderAll(); });
+    document.getElementById('nextBtn').addEventListener('click', () => { activeIdx = Math.min(beats.length - 1, activeIdx + 1); chosenOption = null; renderAll(); });
+    document.getElementById('nleLanes').addEventListener('click', (e) => {
+      const r = e.currentTarget.getBoundingClientRect();
+      const idx = Math.min(beats.length - 1, Math.max(0, Math.floor(((e.clientX - r.left) / r.width) * beats.length)));
+      activeIdx = idx;
+      chosenOption = null;
+      renderAll();
+    });
+    document.getElementById('affMinus').addEventListener('click', () => { vars.affection = Math.max(0, vars.affection - 1); chosenOption = null; renderAll(); });
+    document.getElementById('affPlus').addEventListener('click', () => { vars.affection = Math.min(10, vars.affection + 1); chosenOption = null; renderAll(); });
+    document.getElementById('keyToggle').addEventListener('click', () => { vars.rooftopKey = !vars.rooftopKey; chosenOption = null; renderAll(); });
+
+    renderScenes();
+    renderGallery();
+    renderAll();
+  </script>
+</body>
+</html>
