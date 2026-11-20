@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { Globe, Plus, Trash2, Search, Type, Image as ImageIcon } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Globe, Plus, Trash2, Search, Type, Image as ImageIcon, Sparkles } from 'lucide-react';
 import { extractLocalizableStrings } from '@shared/defaults';
 import { useAppStore } from '../store/useAppStore';
 
@@ -13,19 +13,34 @@ const PRESET_LANGS = [
 ];
 
 export const LocalizationPage: React.FC = () => {
-  const { project, mutateProject, pushToast } = useAppStore();
-  const [selectedLangCode, setSelectedLangCode] = useState<string>('');
+  const {
+    project,
+    mutateProject,
+    pushToast,
+    activeLanguageCode,
+    setActiveLanguageCode,
+    setAiDrawerOpen,
+    sendAiMessage,
+    aiBusy,
+  } = useAppStore();
+  const [selectedLangCode, setSelectedLangCode] = useState<string>(activeLanguageCode ?? '');
   const [filterMode, setFilterMode] = useState<'all' | 'untranslated' | 'translated'>('all');
   const [search, setSearch] = useState('');
   const [newLangPreset, setNewLangPreset] = useState('en');
 
   const strings = useMemo(() => (project ? extractLocalizableStrings(project) : []), [project]);
 
-  if (!project) return null;
-
-  const languages = project.localization.languages;
+  const languages = project?.localization.languages ?? [];
   const activeLang =
-    languages.find((l) => l.code === selectedLangCode) ?? languages[0] ?? null;
+    languages.find((l) => l.code === (selectedLangCode || activeLanguageCode)) ?? languages[0] ?? null;
+
+  useEffect(() => {
+    if (activeLang && activeLang.code !== activeLanguageCode) {
+      setActiveLanguageCode(activeLang.code);
+    }
+  }, [activeLang, activeLanguageCode, setActiveLanguageCode]);
+
+  if (!project) return null;
 
   const handleAddLanguage = () => {
     const preset = PRESET_LANGS.find((p) => p.code === newLangPreset) ?? PRESET_LANGS[0];
@@ -43,6 +58,7 @@ export const LocalizationPage: React.FC = () => {
       });
     });
     setSelectedLangCode(preset.code);
+    setActiveLanguageCode(preset.code);
     pushToast('success', `已添加目标语言「${preset.name}」，游戏内设置页将自动支持切换语言`);
   };
 
@@ -104,7 +120,10 @@ export const LocalizationPage: React.FC = () => {
               return (
                 <div
                   key={lang.code}
-                  onClick={() => setSelectedLangCode(lang.code)}
+                  onClick={() => {
+                    setSelectedLangCode(lang.code);
+                    setActiveLanguageCode(lang.code);
+                  }}
                   className={`p-2.5 rounded-md border cursor-pointer ${
                     isSel
                       ? 'bg-[#FFF1ED] border-[#FF5A3D]'
@@ -259,9 +278,25 @@ export const LocalizationPage: React.FC = () => {
           </div>
         ) : (
           <div className="max-w-[820px] flex flex-col gap-3">
-            <div className="text-[13px] text-[#706A60]">
-              当前正在翻译：<strong className="text-[#171513]">{activeLang.name}</strong>（显示{' '}
-              {filteredStrings.length} / {strings.length} 条）
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-[13px] text-[#706A60]">
+                当前正在翻译：<strong className="text-[#171513]">{activeLang.name}</strong>（显示{' '}
+                {filteredStrings.length} / {strings.length} 条）
+              </div>
+              <button
+                data-testid="ai-translate-lang-btn"
+                disabled={aiBusy}
+                onClick={() => {
+                  setAiDrawerOpen(true);
+                  void sendAiMessage(
+                    `请读取多语言本地化中「${activeLang.name} (${activeLang.code})」所有尚未翻译的词条，并帮我全部翻译成自然地道的 ${activeLang.name} 直接填入。`
+                  );
+                }}
+                className="paper-btn-secondary px-3 py-1 text-[12px] inline-flex items-center gap-1.5 text-[#171513] hover:border-[#FF5A3D]"
+              >
+                <Sparkles size={13} className="text-[#FF5A3D]" />
+                AI 一键翻译未译词条
+              </button>
             </div>
             {filteredStrings.map((entry) => (
               <div key={entry.key} className="paper-card p-3.5 flex flex-col gap-2">

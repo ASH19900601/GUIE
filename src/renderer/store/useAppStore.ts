@@ -63,6 +63,7 @@ interface AppState {
   selectedBlockId: string | null;
   selectedCharacterId: string | null;
   selectedAssetId: string | null;
+  activeLanguageCode: string | null;
   editingChoiceTarget: { sceneId: string; blockId: string; optionId: string } | null;
 
   // Save Safety & Global Undo/Redo
@@ -118,6 +119,7 @@ interface AppState {
   setSelectedBlockId: (blockId: string | null) => void;
   setSelectedCharacterId: (characterId: string | null) => void;
   setSelectedAssetId: (assetId: string | null) => void;
+  setActiveLanguageCode: (langCode: string | null) => void;
   openChoiceOptionEditor: (sceneId: string, blockId: string, optionId: string) => Promise<void>;
   clearChoiceOptionEditor: () => void;
 
@@ -184,6 +186,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   selectedBlockId: null,
   selectedCharacterId: null,
   selectedAssetId: null,
+  activeLanguageCode: null,
   editingChoiceTarget: null,
 
   saveStatus: 'saved',
@@ -389,6 +392,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   setSelectedBlockId: (selectedBlockId) => set({ selectedBlockId }),
   setSelectedCharacterId: (selectedCharacterId) => set({ selectedCharacterId }),
   setSelectedAssetId: (selectedAssetId) => set({ selectedAssetId }),
+  setActiveLanguageCode: (activeLanguageCode) => set({ activeLanguageCode }),
 
   openChoiceOptionEditor: async (sceneId, blockId, optionId) => {
     await get().flushPendingSaves();
@@ -727,6 +731,11 @@ export const useAppStore = create<AppState>((set, get) => ({
       const history = get()
         .aiMessages.slice(0, -1)
         .map((m) => ({ role: m.role, content: m.content }));
+      const selChar = state.project.characters.find((c) => c.id === state.selectedCharacterId);
+      const selAsset = state.project.assets.find((a) => a.id === state.selectedAssetId);
+      const activeLang =
+        state.project.localization.languages.find((l) => l.code === state.activeLanguageCode) ??
+        state.project.localization.languages[0];
       const res = await window.guie.sendAiPrompt({
         projectDir: state.projectDir,
         project: state.project,
@@ -738,6 +747,12 @@ export const useAppStore = create<AppState>((set, get) => ({
           activeSceneName: activeScene?.name ?? null,
           selectedBlockId: state.selectedBlockId,
           selectedBlockSummary: selSummary ?? null,
+          selectedCharacterId: selChar?.id ?? null,
+          selectedCharacterName: selChar?.name ?? null,
+          selectedAssetId: selAsset?.id ?? null,
+          selectedAssetName: selAsset?.name ?? null,
+          activeLanguageCode: activeLang?.code ?? null,
+          activeLanguageName: activeLang?.name ?? null,
         },
       });
 

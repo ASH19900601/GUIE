@@ -1546,17 +1546,28 @@ function generateLanguageRpy(
     lines.push('');
   }
 
-  // String translations
+  // String translations (compile dialogue/choice strings identically to script.rpy so {玩家名字}/{状态:...} placeholders match at runtime!)
   lines.push(`translate ${langCode} strings:`);
   const seen = new Set<string>();
+  const addPair = (oldCompiled: string, newCompiled: string) => {
+    if (!oldCompiled || seen.has(oldCompiled)) return;
+    seen.add(oldCompiled);
+    lines.push(`    old "${oldCompiled}"`);
+    lines.push(`    new "${newCompiled}"`);
+  };
   for (const item of localizable) {
     const translated = lang.translations[item.key];
     if (!translated || !translated.trim()) continue;
-    const oldEsc = escapeRenpyString(item.sourceText);
-    if (seen.has(oldEsc)) continue;
-    seen.add(oldEsc);
-    lines.push(`    old "${oldEsc}"`);
-    lines.push(`    new "${escapeRenpyString(translated)}"`);
+    const isDialogueLike =
+      item.key.endsWith('.text') ||
+      item.key.endsWith('.prompt') ||
+      item.key.endsWith('.label') ||
+      item.key.endsWith('.hint');
+    if (isDialogueLike) {
+      addPair(compileDialogueText(item.sourceText, project), compileDialogueText(translated, project));
+    } else {
+      addPair(escapeRenpyString(item.sourceText), escapeRenpyString(translated));
+    }
   }
 
   if (seen.size === 0) {

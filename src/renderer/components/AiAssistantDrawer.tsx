@@ -39,19 +39,51 @@ const TAB_LABELS: Record<string, string> = {
   finish: '完成与发布',
 };
 
-const QUICK_TASKS = [
-  { label: '续写 5 句对白', prompt: '请根据当前场景的氛围，续写 5 句自然生动的对白或旁白。' },
-  { label: '润色选中台词', prompt: '请把当前选中的对白台词润色得更有画面感与人物性格，并直接更新到卡片中。' },
-  {
-    label: '设计三分支并汇合',
-    prompt: '请设计花园、天台、回家三条分支，去天台需要好感度达到 2，三条路线之后能自然汇合或通向不同结局。',
-  },
-  { label: '检查剧情矛盾', prompt: '请通读当前项目的场景与条件分支，帮我检查是否存在逻辑矛盾或人物设定冲突。' },
-  {
-    label: '定制手机聊天界面',
-    prompt: '帮我制作一个可在游戏中随时打开查看的定制手机聊天消息界面（高级定制功能），并自动完成校验确保游戏可正常运行。',
-  },
-];
+const QUICK_TASKS_BY_TAB: Record<string, Array<{ label: string; prompt: string }>> = {
+  story: [
+    { label: '续写 5 句对白', prompt: '请根据当前场景的氛围，续写 5 句自然生动的对白或旁白。' },
+    { label: '润色选中台词', prompt: '请把当前选中的对白台词润色得更有画面感与人物性格，并直接更新到卡片中。' },
+    {
+      label: '设计三分支并汇合',
+      prompt: '请设计花园、天台、回家三条分支，去天台需要好感度达到 2，三条路线之后能自然汇合或通向不同结局。',
+    },
+    { label: '加镜头与花瓣特效', prompt: '请在当前场景合适的位置插入柔和镜头推近与樱花花瓣粒子演出效果。' },
+    {
+      label: '定制手机聊天界面',
+      prompt: '帮我制作一个可在游戏中随时打开查看的定制手机聊天消息界面（高级定制功能），并自动完成校验确保游戏可正常运行。',
+    },
+  ],
+  characters: [
+    { label: '新建双主角与好感度', prompt: '请帮我创建两名性格鲜明的角色，并为他们配置跨周目持久的好感度状态。' },
+    { label: '完善角色简介与配色', prompt: '请查看当前项目的所有角色，为他们补充生动的人物设定简介并调整和谐的代表色。' },
+  ],
+  assets: [
+    { label: '盘点未使用的素材', prompt: '请帮我查询素材库，看看有哪些素材还没有被剧情使用，并给出搭配建议。' },
+    { label: '将背景标记为 CG 鉴赏', prompt: '请查看素材库中的背景画面，将重要场景插画标记为 CG 鉴赏插画并设置好相册标题。' },
+  ],
+  appearance: [
+    { label: '切换午夜电影暗色风', prompt: '请把游戏外观切换为「午夜剧场」主题预设，并将对话框透明度调到 0.88。' },
+    { label: '切换清爽明亮校园风', prompt: '请把游戏外观切换为「明亮清爽」主题预设，按钮改为圆润胶囊样式。' },
+    { label: '调大对白字号并存预设', prompt: '请将对话框正文字号调到 32，启用文字阴影，并另存为“大字清晰版”对话框预设。' },
+  ],
+  extensions: [
+    { label: '开启收集册与全员好感', prompt: '请在扩展市场中开启 CG 鉴赏与结局收集册，并开启角色好感度系统、一键为所有角色生成好感度轨道。' },
+    { label: '开启六格存档与章节卡', prompt: '请帮我开启六格大图存档页、选择前自动存档，以及水墨风格的章节标题过场卡。' },
+  ],
+  reuse: [
+    { label: '保存当前角色到复用库', prompt: '请把当前项目中的主要角色保存到跨项目复用库，方便以后新作品直接使用。' },
+    { label: '查看复用库可用资产', prompt: '请列出我跨项目复用库中的所有条目，并告诉我可以导入哪些内容。' },
+  ],
+  localization: [
+    { label: '一键翻译全部未译对白', prompt: '请读取当前多语言版本中所有尚未翻译的词条，将标题、角色名、对白和分支选项全部翻译并填入。' },
+    { label: '新增英语版本并翻译', prompt: '请添加英语（en）本地化版本，并将全项目所有对白与选项翻译成地道自然的英文填入。' },
+    { label: '新增日语版本并翻译', prompt: '请添加日语（ja）本地化版本，并将全项目所有对白与选项翻译成自然的日文填入。' },
+  ],
+  finish: [
+    { label: '全面体检并修复孤立场景', prompt: '请运行项目全面检查，自动修复孤立未接入主线的场景，并告诉我是否可以安全导出。' },
+    { label: '检查剧情与分支逻辑', prompt: '请通读当前项目的场景与条件分支，帮我检查是否存在逻辑矛盾、死胡同或未连接选项。' },
+  ],
+};
 
 export const AiAssistantDrawer: React.FC = () => {
   const {
@@ -65,6 +97,7 @@ export const AiAssistantDrawer: React.FC = () => {
     aiStreamingOps,
     activeTab,
     activeSceneId,
+    activeLanguageCode,
     project,
     updateAiSettings,
     sendAiMessage,
@@ -99,6 +132,10 @@ export const AiAssistantDrawer: React.FC = () => {
   if (!aiDrawerOpen) return null;
 
   const activeScene = project?.scenes.find((s) => s.id === activeSceneId);
+  const activeLang =
+    project?.localization.languages.find((l) => l.code === activeLanguageCode) ??
+    project?.localization.languages[0];
+  const quickTasks = QUICK_TASKS_BY_TAB[activeTab] ?? QUICK_TASKS_BY_TAB.story;
 
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -249,7 +286,11 @@ export const AiAssistantDrawer: React.FC = () => {
       <div className="px-4 py-2 border-b border-[#EFECE3] bg-[#FBFAF5] text-[11.5px] text-[#706A60] flex items-center justify-between gap-2">
         <span className="truncate">
           当前上下文：{TAB_LABELS[activeTab] || '工作台'}
-          {activeScene ? ` · 场景「${activeScene.name}」` : ''}
+          {activeTab === 'localization' && activeLang
+            ? ` · 语言「${activeLang.name}」`
+            : activeScene
+            ? ` · 场景「${activeScene.name}」`
+            : ''}
         </span>
         <span className="text-[11px] text-[#2A7B50] shrink-0">修改支持一键撤销</span>
       </div>
@@ -267,7 +308,7 @@ export const AiAssistantDrawer: React.FC = () => {
             </div>
             <div className="text-[11.5px] font-medium text-[#706A60]">一键快捷任务</div>
             <div className="flex flex-wrap gap-1.5">
-              {QUICK_TASKS.map((qt) => (
+              {quickTasks.map((qt) => (
                 <button
                   key={qt.label}
                   onClick={() => void sendAiMessage(qt.prompt)}
@@ -386,7 +427,7 @@ export const AiAssistantDrawer: React.FC = () => {
       <form onSubmit={handleSend} className="p-3 border-t border-[#D7D1C6] bg-white flex flex-col gap-2">
         {aiMessages.length > 0 && !aiBusy && (
           <div className="flex items-center gap-1 overflow-x-auto sidebar-scroll pb-0.5">
-            {QUICK_TASKS.map((qt) => (
+            {quickTasks.map((qt) => (
               <button
                 key={qt.label}
                 type="button"

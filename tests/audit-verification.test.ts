@@ -13,6 +13,7 @@ import { compileDialogueText, compileProjectToRenpy } from '../src/main/renpyCom
 import { runRenpyLint } from '../src/main/renpyRunner';
 import { createId, replaceAssetReferences } from '../src/shared/defaults';
 import { advancePreviewStep, simulateSceneTimeline } from '../src/shared/previewEngine';
+// @ts-expect-error mjs fixture helper without .d.ts
 import { createTestFixtures } from '../scripts/fixture-assets.mjs';
 
 let tempRoot: string;

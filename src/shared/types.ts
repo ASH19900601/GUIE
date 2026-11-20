@@ -629,6 +629,12 @@ export interface AiEditorContext {
   activeSceneName?: string | null;
   selectedBlockId?: string | null;
   selectedBlockSummary?: string | null;
+  selectedCharacterId?: string | null;
+  selectedCharacterName?: string | null;
+  selectedAssetId?: string | null;
+  selectedAssetName?: string | null;
+  activeLanguageCode?: string | null;
+  activeLanguageName?: string | null;
 }
 
 // ==========================================

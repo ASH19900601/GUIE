@@ -1345,9 +1345,20 @@ export function extractLocalizableStrings(project: ProjectData): LocalizableStri
     if (isSceneEffectivelyDisabled(project, scene)) continue;
     scene.blocks.forEach((blk, idx) => {
       if (blk.type === 'dialogue' && blk.text.trim()) {
-        const sp = blk.speakerId
+        const sp = blk.dynamicName?.trim()
+          ? blk.dynamicName.trim()
+          : blk.speakerId
           ? project.characters.find((c) => c.id === blk.speakerId)?.name ?? '角色'
           : '旁白';
+        if (blk.dynamicName?.trim()) {
+          entries.push({
+            key: `blk.${blk.id}.dynamicName`,
+            sourceText: blk.dynamicName.trim(),
+            context: `${scene.name} #${idx + 1}（临时称呼）`,
+            sceneId: scene.id,
+            blockId: blk.id,
+          });
+        }
         entries.push({
           key: `blk.${blk.id}.text`,
           sourceText: blk.text,
@@ -1384,12 +1395,76 @@ export function extractLocalizableStrings(project: ProjectData): LocalizableStri
               blockId: blk.id,
             });
           }
+          if (opt.targetType === 'ending' && opt.endingTitle?.trim()) {
+            entries.push({
+              key: `opt.${opt.id}.endingTitle`,
+              sourceText: opt.endingTitle,
+              context: `${scene.name} #${idx + 1} 选项 ${oi + 1} 结局标题`,
+              sceneId: scene.id,
+              blockId: blk.id,
+            });
+          }
+          if (opt.targetType === 'ending' && opt.endingSubtitle?.trim()) {
+            entries.push({
+              key: `opt.${opt.id}.endingSubtitle`,
+              sourceText: opt.endingSubtitle,
+              context: `${scene.name} #${idx + 1} 选项 ${oi + 1} 结局副标题`,
+              sceneId: scene.id,
+              blockId: blk.id,
+            });
+          }
         });
-      } else if (blk.type === 'flow' && blk.action === 'ending' && blk.endingTitle) {
+      } else if (blk.type === 'condition_branch') {
+        if (blk.trueTargetType === 'ending' && blk.trueEndingTitle?.trim()) {
+          entries.push({
+            key: `blk.${blk.id}.trueEndingTitle`,
+            sourceText: blk.trueEndingTitle,
+            context: `${scene.name} #${idx + 1} 条件成立结局标题`,
+            sceneId: scene.id,
+            blockId: blk.id,
+          });
+        }
+        if (blk.falseTargetType === 'ending' && blk.falseEndingTitle?.trim()) {
+          entries.push({
+            key: `blk.${blk.id}.falseEndingTitle`,
+            sourceText: blk.falseEndingTitle,
+            context: `${scene.name} #${idx + 1} 条件不成立结局标题`,
+            sceneId: scene.id,
+            blockId: blk.id,
+          });
+        }
+      } else if (blk.type === 'flow' && blk.action === 'ending') {
+        if (blk.endingTitle?.trim()) {
+          entries.push({
+            key: `blk.${blk.id}.endingTitle`,
+            sourceText: blk.endingTitle,
+            context: `${scene.name} 结局标题`,
+            sceneId: scene.id,
+            blockId: blk.id,
+          });
+        }
+        if (blk.endingSubtitle?.trim()) {
+          entries.push({
+            key: `blk.${blk.id}.endingSubtitle`,
+            sourceText: blk.endingSubtitle,
+            context: `${scene.name} 结局副标题`,
+            sceneId: scene.id,
+            blockId: blk.id,
+          });
+        }
+      } else if (blk.type === 'player_name_input' && blk.prompt?.trim()) {
         entries.push({
-          key: `blk.${blk.id}.endingTitle`,
-          sourceText: blk.endingTitle,
-          context: `${scene.name} 结局标题`,
+          key: `blk.${blk.id}.prompt`,
+          sourceText: blk.prompt,
+          context: `${scene.name} #${idx + 1} 主角命名提示`,
+          sceneId: scene.id,
+          blockId: blk.id,
+        });
+      } else if (blk.type === 'cg_unlock' && blk.title?.trim()) {
+        entries.push({
+          key: `blk.${blk.id}.title`,
+          sourceText: blk.title,
+          context: `${scene.name} #${idx + 1} CG 鉴赏标题`,
           sceneId: scene.id,
           blockId: blk.id,
         });
